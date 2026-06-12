@@ -637,7 +637,7 @@ function msg(txt,cls=''){
 function floaty(x,y,txt,col='#f2b441'){ floaties.push({x,y,txt,col,t:1}); }
 
 /* hotbar */
-const HOTKEYS=['champi','rosee','viande','bandage','potion_energie','gourde','feu','etabli','mur','coffre','lit','tente'];
+const HOTKEYS=['pomme','baie','champi','rosee','viande','bandage','potion_energie','gourde','feu','etabli','mur','coffre','lit','tente'];
 function updateHotbar(){
   const hb=document.getElementById('hotbar');hb.innerHTML='';
   HOTKEYS.forEach((it,i)=>{
@@ -655,11 +655,36 @@ function updateHotbar(){
 function useItem(it){
   if(!has(it))return;
   const def=ITEMS[it];
-  if(def.eat){player.food=clamp(player.food+def.eat.food,0,100);take(it);st.ate=true;floaty(player.x,player.y-20,'+'+def.eat.food+' 🍖');beep(520,.1,'sine');}
-  else if(def.drink){player.water=clamp(player.water+def.drink.water,0,100);take(it);st.drank=true;floaty(player.x,player.y-20,'+'+def.drink.water+' 💧','#7fc4e8');beep(660,.1,'sine');}
-  else if(def.heal){player.hp=clamp(player.hp+def.heal,0,player.maxhp);take(it);floaty(player.x,player.y-20,'+'+def.heal+' ❤','#e0584e');beep(700,.12,'sine');}
-  else if(def.stamina){player.stamina=clamp(player.stamina+def.stamina,0,player.maxstamina);take(it);floaty(player.x,player.y-20,'+'+def.stamina+' ⚡','#ffb703');beep(660,.1,'triangle');}
-  else if(def.place)tryPlace(it);
+  let used = false;
+  if(def.eat){
+    player.food=clamp(player.food+def.eat.food,0,100);
+    st.ate=true;
+    floaty(player.x,player.y-20,'+'+def.eat.food+' 🍖');
+    used = true;
+  }
+  if(def.drink){
+    player.water=clamp(player.water+def.drink.water,0,100);
+    st.drank=true;
+    floaty(player.x,player.y-35,'+'+def.drink.water+' 💧','#7fc4e8');
+    used = true;
+  }
+  if(def.heal){
+    player.hp=clamp(player.hp+def.heal,0,player.maxhp);
+    floaty(player.x,player.y-20,'+'+def.heal+' ❤','#e0584e');
+    used = true;
+  }
+  if(def.stamina){
+    player.stamina=clamp(player.stamina+def.stamina,0,player.maxstamina);
+    floaty(player.x,player.y-20,'+'+def.stamina+' ⚡','#ffb703');
+    used = true;
+  }
+  
+  if (used) {
+    take(it);
+    beep(520,.1,'sine');
+  } else if(def.place) {
+    tryPlace(it);
+  }
 }
 function useHotbar(i){
   const it=HOTKEYS[i];
@@ -1663,8 +1688,8 @@ function loop(t){
 }
 
 function updateInsects(dt) {
-  if (insects.length < 35) {
-    const isBee = Math.random() < 0.6;
+  if (insects.length < 15) {
+    const isBee = Math.random() < 0.35;
     const colors = ['#4fc3f7', '#ffb74d', '#e57373', '#f0f4c3', '#ba68c8'];
     insects.push({
       x: player.x + R(-450, 450),
