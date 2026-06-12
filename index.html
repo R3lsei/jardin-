@@ -1268,18 +1268,23 @@ function render(){
   const x1=Math.min(MW-1,(cam.x+cv.width)/TS|0),y1=Math.min(MH-1,(cam.y+cv.height)/TS|0);
 
   /* tuiles */
+  cx.save();
+  cx.translate(-cam.x, -cam.y);
   for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
-    const t=map[ty*MW+tx],px=tx*TS-cam.x,py=ty*TS-cam.y;
+    const t=map[ty*MW+tx];
     if(patterns[t]){
-      cx.save();
-      cx.translate(-cam.x, -cam.y);
       cx.fillStyle = patterns[t];
       cx.fillRect(tx*TS, ty*TS, TS+1.5, TS+1.5);
-      cx.restore();
     } else {
       cx.fillStyle='#000';
-      cx.fillRect(px,py,TS+1,TS+1);
+      cx.fillRect(tx*TS, ty*TS, TS+1, TS+1);
     }
+  }
+  cx.restore();
+
+  // animations
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    const t=map[ty*MW+tx],px=tx*TS-cam.x,py=ty*TS-cam.y;
     if(t===3){
       const w=Math.sin(performance.now()/600+tx+ty)*2;
       cx.fillStyle='rgba(255,255,255,.2)';
@@ -1585,15 +1590,27 @@ function drawFire(x,y,t){
   cx.fillStyle=g;cx.beginPath();cx.arc(x,y-6,14+f,0,7);cx.fill();
 }
 
+let sharedLightCanvas = null;
+let sharedLightCtx = null;
+
 function drawDarkness(){
   let dark=0;
   if(timeOfDay>DAY_LEN-20&&timeOfDay<DAY_LEN)dark=(timeOfDay-(DAY_LEN-20))/20*0.82;
   else if(isNight())dark=0.82;
   if(timeOfDay<14)dark=Math.max(dark,0.82*(1-timeOfDay/14));
   if(dark<=0.01)return;
-  const lc=document.createElement('canvas');
-  lc.width=cv.width;lc.height=cv.height;
-  const l=lc.getContext('2d');
+  
+  if (!sharedLightCanvas) {
+    sharedLightCanvas = document.createElement('canvas');
+    sharedLightCtx = sharedLightCanvas.getContext('2d');
+  }
+  if (sharedLightCanvas.width !== cv.width || sharedLightCanvas.height !== cv.height) {
+    sharedLightCanvas.width = cv.width;
+    sharedLightCanvas.height = cv.height;
+  }
+  
+  const lc = sharedLightCanvas;
+  const l = sharedLightCtx;
   l.fillStyle=`rgba(5,6,20,${dark})`;l.fillRect(0,0,lc.width,lc.height);
   l.globalCompositeOperation='destination-out';
   const px=player.x-cam.x,py=player.y-cam.y;
