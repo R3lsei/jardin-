@@ -454,7 +454,7 @@ function spawnSomewhere(type,biome){
 
 /* ---------- JOUEUR ---------- */
 const player={
-  x:SPAWN.x,y:SPAWN.y,r:11,
+  x:SPAWN.x,y:SPAWN.y,r:14,
   hp:100,maxhp:100,food:100,water:100,stamina:100,maxstamina:100,
   spd:120, facing:0, atkCd:0, iFrames:0,
   inv:{}, kills:0, harvested:0, crafted:0, built:0,
@@ -1598,10 +1598,10 @@ function drawPlayer(x,y){
   if(player.iFrames>0&&performance.now()%200<100){cx.restore();return;}
   
   if (sprites.player) {
-    cx.drawImage(sprites.player, -12, -20, 24, 24);
+    cx.drawImage(sprites.player, -18, -30, 36, 36);
   }
   
-  if(has('armure')) { cx.font='14px serif'; cx.fillText('🛡️', 6, -12); }
+  if(has('armure')) { cx.font='16px serif'; cx.fillText('🛡️', 10, -18); }
   
   const wIc=has('epee')?'⚔️':has('lance')?'🗡️':has('hache')?'🪓':null;
   if(wIc){
@@ -2325,10 +2325,10 @@ function drawRemotePlayer(rp, x, y) {
   cx.fillStyle = 'rgba(0,0,0,.3)'; cx.beginPath(); cx.ellipse(0, 12 - bob, 10, 4, 0, 0, 7); cx.fill();
   
   if (sprites.player) {
-    cx.drawImage(sprites.player, -12, -20, 24, 24);
+    cx.drawImage(sprites.player, -18, -30, 36, 36);
   }
   
-  if (rp.armor) { cx.font='14px serif'; cx.fillText('🛡️', 6, -12); }
+  if (rp.armor) { cx.font='16px serif'; cx.fillText('🛡️', 10, -18); }
   
   const hasAxe = rp.inv && rp.inv.hache;
   const hasSword = rp.inv && rp.inv.epee;
