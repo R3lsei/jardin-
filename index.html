@@ -148,6 +148,7 @@
   <div id="dayLabel">☀ JOUR 1</div>
   <div id="biomeLabel">Prairie</div>
   <canvas id="minimap" width="150" height="150"></canvas>
+  <button id="musicToggleBtn" class="hud-btn" style="background:rgba(8, 22, 10, 0.65); backdrop-filter:blur(14px); border:1px solid rgba(255,255,255,0.08); border-radius:30px; padding:4px 10px; font-size:10px; color:#ffd166; border-color:rgba(255,209,102,0.3); cursor:pointer; display:flex; align-items:center; gap:4px; font-family:inherit; transition:all .15s; margin-top:6px; box-shadow:0 2px 6px rgba(0,0,0,0.2);" onclick="toggleAmbientMusic()" onmouseover="this.style.background='rgba(8, 22, 10, 0.85)'" onmouseout="this.style.background='rgba(8, 22, 10, 0.65)'"><span id="musicIcon">🎵</span> Musique : ON</button>
 </div>
 <div class="hud" id="quest">
   <h3>◈ Objectif</h3>
@@ -500,6 +501,8 @@ const RECIPES = [
 /* ---------- ENTITÉS ---------- */
 let resources=[], trees=[], enemies=[], drops=[], fires=[], placed=[], particles=[], floaties=[], insects=[], diaries=[];
 let screenShake=0, paused=false;
+let musicEnabled=true, musicTimer=null, activeMusicOscillators=[];
+let isRaining=false, rainTimer=240, rainParticles=[], rainNoiseNode=null, rainFilter=null, rainGain=null;
 const structGrid={}; // "tx,ty" -> struct
 const skey=(tx,ty)=>tx+','+ty;
 
@@ -739,8 +742,20 @@ function togglePause() {
     closeCraft();
     closeChest();
     closeDiary();
+    if (rainGain && netMode === 'solo') {
+      try {
+        rainGain.gain.setValueAtTime(rainGain.gain.value, AC.currentTime);
+        rainGain.gain.linearRampToValueAtTime(0.004, AC.currentTime + 0.3);
+      } catch(e){}
+    }
   } else {
     pPanel.style.display = 'none';
+    if (rainGain && netMode === 'solo' && isRaining) {
+      try {
+        rainGain.gain.setValueAtTime(rainGain.gain.value, AC.currentTime);
+        rainGain.gain.linearRampToValueAtTime(0.02, AC.currentTime + 0.3);
+      } catch(e){}
+    }
   }
 }
 
@@ -879,6 +894,221 @@ function playSound(type) {
       });
     }
   } catch(e) {}
+}
+
+/* ---------- MUSIQUE & MÉTÉO DE SYNTHÈSE ---------- */
+function toggleAmbientMusic() {
+  musicEnabled = !musicEnabled;
+  const btn = document.getElementById('musicToggleBtn');
+  if (musicEnabled) {
+    btn.innerHTML = '<span id="musicIcon">🎵</span> Musique : ON';
+    btn.style.color = '#ffd166';
+    btn.style.borderColor = 'rgba(255,209,102,0.3)';
+    startAmbientMusic();
+    msg('🎵 Musique d\'ambiance activée.');
+  } else {
+    btn.innerHTML = '<span id="musicIcon">🔇</span> Musique : OFF';
+    btn.style.color = 'rgba(255,255,255,0.4)';
+    btn.style.borderColor = 'rgba(255,255,255,0.06)';
+    stopAmbientMusic();
+    msg('🔇 Musique d\'ambiance désactivée.');
+  }
+}
+
+function startAmbientMusic() {
+  if (!musicEnabled) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') {
+      AC.resume().then(() => {
+        if (!musicTimer) musicScheduleNext();
+      }).catch(() => {
+        setTimeout(startAmbientMusic, 2000);
+      });
+      return;
+    }
+    if (!musicTimer) musicScheduleNext();
+  } catch(e){}
+}
+
+function stopAmbientMusic() {
+  if (musicTimer) {
+    clearTimeout(musicTimer);
+    musicTimer = null;
+  }
+  activeMusicOscillators.forEach(osc => {
+    try {
+      osc.gainNode.gain.cancelScheduledValues(AC.currentTime);
+      osc.gainNode.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + 1.2);
+      setTimeout(() => { try { osc.osc.stop(); } catch(err){} }, 1300);
+    } catch(e){}
+  });
+  activeMusicOscillators = [];
+}
+
+function playAmbientMusicNote(freq, timeOffset, duration, volume = 0.02, type = 'sine') {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') return;
+    const now = AC.currentTime + timeOffset;
+    
+    const osc = AC.createOscillator();
+    const gainNode = AC.createGain();
+    const filter = AC.createBiquadFilter();
+    
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, now);
+    
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(800, now);
+    filter.frequency.exponentialRampToValueAtTime(320, now + duration);
+    
+    gainNode.gain.setValueAtTime(0.0001, now);
+    gainNode.gain.linearRampToValueAtTime(volume, now + 1.2);
+    gainNode.gain.setValueAtTime(volume, now + duration - 1.8);
+    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    
+    osc.connect(filter).connect(gainNode).connect(AC.destination);
+    
+    osc.start(now);
+    osc.stop(now + duration);
+    
+    const activeObj = { osc, gainNode };
+    activeMusicOscillators.push(activeObj);
+    setTimeout(() => {
+      const idx = activeMusicOscillators.indexOf(activeObj);
+      if (idx !== -1) activeMusicOscillators.splice(idx, 1);
+    }, (timeOffset + duration + 0.5) * 1000);
+  } catch(e){}
+}
+
+function playAmbientMusicChord() {
+  if (!musicEnabled) return;
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') return;
+    
+    const night = isNight();
+    if (night) {
+      const baseFreqs = [130.81, 155.56, 196.00, 233.08]; // C3, Eb3, G3, Bb3
+      const root = baseFreqs[Math.floor(Math.random() * baseFreqs.length)];
+      playAmbientMusicNote(root / 2, 0, 7.0, 0.015, 'triangle');
+      playAmbientMusicNote(root, 0.5, 6.0, 0.015, 'sine');
+      if (Math.random() < 0.7) {
+        const third = baseFreqs[Math.floor(Math.random() * baseFreqs.length)];
+        playAmbientMusicNote(third * 1.5, 1.2, 5.0, 0.012, 'sine');
+      }
+    } else {
+      const freqs = [261.63, 293.66, 329.63, 392.00, 440.00, 523.25, 587.33, 659.25, 783.99]; // C4 to G5 pentatonic
+      const base = freqs[Math.floor(Math.random() * 3)];
+      playAmbientMusicNote(base / 2, 0, 6.0, 0.018, 'sine');
+      
+      const n1 = freqs[3 + Math.floor(Math.random() * 3)];
+      const n2 = freqs[5 + Math.floor(Math.random() * 4)];
+      
+      playAmbientMusicNote(n1, 0.4, 4.5, 0.015, 'sine');
+      playAmbientMusicNote(n2, 1.2, 4.0, 0.012, 'sine');
+      if (Math.random() < 0.5) {
+        const n3 = freqs[Math.floor(Math.random() * freqs.length)];
+        playAmbientMusicNote(n3, 2.0, 3.5, 0.01, 'sine');
+      }
+    }
+  } catch(e){}
+}
+
+function musicScheduleNext() {
+  if (!musicEnabled) return;
+  playAmbientMusicChord();
+  const delay = 16000 + Math.random() * 12000; // 16-28s pause
+  musicTimer = setTimeout(() => {
+    musicTimer = null;
+    musicScheduleNext();
+  }, delay);
+}
+
+function updateWeather(dt) {
+  if (netMode !== 'client') {
+    rainTimer -= dt;
+    if (rainTimer <= 0) {
+      isRaining = !isRaining;
+      rainTimer = isRaining ? R(45, 80) : R(200, 360);
+      if (isRaining) {
+        msg('🌧️ Une averse commence à tomber sur le jardin...', 'bad');
+        playSound('quest');
+        startRainSound();
+      } else {
+        msg('☀ La pluie s\'arrête, le ciel se dégage.', 'good');
+        stopRainSound();
+      }
+    }
+  }
+
+  if (isRaining || rainParticles.length > 0) {
+    if (isRaining && rainParticles.length < 100) {
+      rainParticles.push({
+        x: Math.random() * cv.width,
+        y: -20,
+        vy: R(400, 550),
+        vx: R(-30, -10),
+        len: R(10, 20)
+      });
+    }
+    for (let i = rainParticles.length - 1; i >= 0; i--) {
+      const p = rainParticles[i];
+      p.y += p.vy * dt;
+      p.x += p.vx * dt;
+      if (p.y > cv.height + 20 || p.x < -20) {
+        rainParticles.splice(i, 1);
+      }
+    }
+  }
+}
+
+function startRainSound() {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') return;
+    
+    const bufferSize = AC.sampleRate * 2.0;
+    const buffer = AC.createBuffer(1, bufferSize, AC.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = Math.random() * 2 - 1;
+    }
+    
+    rainNoiseNode = AC.createBufferSource();
+    rainNoiseNode.buffer = buffer;
+    rainNoiseNode.loop = true;
+    
+    rainFilter = AC.createBiquadFilter();
+    rainFilter.type = 'lowpass';
+    rainFilter.frequency.setValueAtTime(450, AC.currentTime);
+    
+    rainGain = AC.createGain();
+    rainGain.gain.setValueAtTime(0.0001, AC.currentTime);
+    rainGain.gain.linearRampToValueAtTime(0.02, AC.currentTime + 3.0);
+    
+    rainNoiseNode.connect(rainFilter).connect(rainGain).connect(AC.destination);
+    rainNoiseNode.start();
+  } catch(e){}
+}
+
+function stopRainSound() {
+  if (rainNoiseNode) {
+    try {
+      const now = AC.currentTime;
+      rainGain.gain.cancelScheduledValues(now);
+      rainGain.gain.setValueAtTime(rainGain.gain.value, now);
+      rainGain.gain.exponentialRampToValueAtTime(0.0001, now + 3.0);
+      const tempNode = rainNoiseNode;
+      setTimeout(() => {
+        try { tempNode.stop(); } catch(err){}
+      }, 3100);
+    } catch(e){}
+    rainNoiseNode = null;
+    rainFilter = null;
+    rainGain = null;
+  }
 }
 
 /* ---------- UI helpers ---------- */
@@ -1933,6 +2163,7 @@ function startGame(){
   spawnTrees();spawnResources();populateEnemies();spawnDiaries();updateHotbar();
   drawMinimapBase();
   running=true;
+  startAmbientMusic();
   msg('🔬 « Le rétrécisseur a explosé… Je dois survivre et rejoindre la machine de secours. »');
   msg('💡 Commence par récolter des fibres (E) sur les pousses vertes.');
   requestAnimationFrame(loop);
@@ -1947,6 +2178,8 @@ function respawn(){
   }
   updateHotbar();
   running=true;last=performance.now();
+  startAmbientMusic();
+  if (isRaining) startRainSound();
   msg('☀ Tu reprends connaissance… La moitié de tes ressources a disparu. (Astuce : range-les dans un coffre !)','bad');
   requestAnimationFrame(loop);
 }
@@ -2017,6 +2250,7 @@ function updateInsects(dt) {
 function update(dt){
   updateInsects(dt);
   screenShake = Math.max(0, screenShake - dt * 4);
+  updateWeather(dt);
   // Interpolation multijoueur
   for (const pid in remotePlayers) {
     const rp = remotePlayers[pid];
@@ -2247,6 +2481,8 @@ function update(dt){
   }
   if(has('cristal')&&dist(player,MACHINE)<70&&!won){
     won=true;running=false;
+    stopAmbientMusic();
+    stopRainSound();
     const m=Math.floor(st.timeAlive/60),s=Math.floor(st.timeAlive%60);
     document.getElementById('winText').textContent='Le Cristal arachnide s\'enclenche dans le réacteur. Un éclair violet, une secousse — et le jardin rétrécit autour de toi. Tu es de retour.';
     document.getElementById('winStats').innerHTML=`⏱ Temps de survie : <b>${m}m ${s}s</b> · ☀ Jours : <b>${st.day}</b><br>⚔ Créatures vaincues : <b>${player.kills}</b> · 🌿 Ressources récoltées : <b>${player.harvested}</b><br>⚒ Objets fabriqués : <b>${player.crafted}</b> · 🏗 Constructions : <b>${player.built}</b> · 💀 Morts : <b>${player.deaths}</b>`;
@@ -2257,6 +2493,8 @@ function update(dt){
 
   if(player.hp<=0){
     running=false;player.deaths++;closeChest();closeCraft();
+    stopAmbientMusic();
+    stopRainSound();
     document.getElementById('deathStats').innerHTML=`Tu as survécu <b>${st.day}</b> jour(s).<br>⚔ ${player.kills} créatures vaincues · 🏗 ${player.built} constructions`;
     document.getElementById('deathScreen').style.display='flex';
   }
@@ -2511,6 +2749,24 @@ function render(){
   drawWallGhost();
 
   drawDarkness();
+  
+  if (isRaining) {
+    cx.fillStyle = 'rgba(10, 15, 30, 0.16)';
+    cx.fillRect(0, 0, cv.width, cv.height);
+  }
+  if (rainParticles.length > 0) {
+    cx.save();
+    cx.strokeStyle = 'rgba(174, 194, 224, 0.45)';
+    cx.lineWidth = 1.25;
+    for (const p of rainParticles) {
+      cx.beginPath();
+      cx.moveTo(p.x, p.y);
+      cx.lineTo(p.x + p.vx * 0.03, p.y + p.vy * 0.03);
+      cx.stroke();
+    }
+    cx.restore();
+  }
+
   drawObjectiveArrow();
   drawMinimapLive();
 }
@@ -3342,6 +3598,7 @@ function handleClientMessage(data) {
     
     document.getElementById('titleScreen').style.display = 'none';
     running = true;
+    startAmbientMusic();
     msg('🎮 Connecté ! Aventure multijoueur commencée.', 'good');
     requestAnimationFrame(loop);
   } else if (data.type === 'hit') {
@@ -3383,6 +3640,18 @@ function handleClientMessage(data) {
     if (data.timeOfDay !== undefined) timeOfDay = data.timeOfDay;
     if (data.day !== undefined) st.day = data.day;
     if (data.questIdx !== undefined) questIdx = data.questIdx;
+    if (data.isRaining !== undefined) {
+      if (data.isRaining !== isRaining) {
+        isRaining = data.isRaining;
+        if (isRaining) {
+          msg('🌧️ Une averse commence à tomber sur le jardin...', 'bad');
+          startRainSound();
+        } else {
+          msg('☀ La pluie s\'arrête, le ciel se dégage.', 'good');
+          stopRainSound();
+        }
+      }
+    }
     
     if (peer && data.players[peer.id]) {
       player.hp = data.players[peer.id].hp;
@@ -3661,7 +3930,8 @@ function broadcastSyncFast() {
     floaties: floaties,
     timeOfDay: timeOfDay,
     day: st.day,
-    questIdx: questIdx
+    questIdx: questIdx,
+    isRaining: isRaining
   };
   for (const c of connections) if (c.open) c.send(syncPacket);
 }
