@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v13 — Aventure de survie</title>
+<title>MICRO-JARDIN v14 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1675,8 +1675,6 @@ function _doHostConnect(statusEl, errLog) {
       c.send({
         type: 'init',
         seed: seed,
-        map: Array.from(map),
-        biomeMap: Array.from(biomeMap),
         resources: resources,
         trees: trees,
         placed: placed,
@@ -1870,8 +1868,10 @@ function handleHostMessage(clientPeerId, data) {
 function handleClientMessage(data) {
   if (data.type === 'init') {
     seed = data.seed;
-    map.set(data.map);
-    biomeMap.set(data.biomeMap);
+    initNoise(seed);
+    generateMap();
+    generateBiomes();
+    
     resources = data.resources;
     trees = data.trees;
     placed = data.placed;
