@@ -1597,25 +1597,26 @@ function hostGame() {
 }
 
 function _doHostConnect(statusEl, errLog) {
+  let peerIsReady = false;
   // Visual countdown
   let secondsLeft = 8;
   statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
   const countdownInterval = setInterval(() => {
     secondsLeft--;
-    if (secondsLeft > 0 && peer && !peer.open) {
+    if (secondsLeft > 0 && !peerIsReady) {
       statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
     }
   }, 1000);
 
   const connectionTimeout = setTimeout(() => {
     clearInterval(countdownInterval);
-    if (peer && !peer.open) {
+    if (!peerIsReady) {
       statusEl.innerHTML = '❌ Délai dépassé (8s). Le serveur PeerJS n\'a pas répondu.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
       if (errLog) {
         errLog.style.display = 'block';
-        errLog.textContent = "Le serveur de signalisation PeerJS (0.peerjs.com:443) n'a pas envoyé de réponse 'open'.\nCauses possibles:\n- Serveur surchargé\n- Pare-feu ou proxy bloquant les WebSockets\n- Bloqueur de publicités interceptant la connexion";
+        errLog.textContent = "Le serveur de signalisation PeerJS n'a pas envoyé de réponse 'open'. Le serveur public est probablement surchargé.";
       }
-      try { peer.destroy(); } catch(e) {}
+      try { if (peer) peer.destroy(); } catch(e) {}
       peer = null;
     }
   }, 8000);
@@ -1631,6 +1632,7 @@ function _doHostConnect(statusEl, errLog) {
   }
   
   peer.on('open', (id) => {
+    peerIsReady = true;
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
     roomCode = id;
@@ -1732,21 +1734,22 @@ function joinGame() {
 }
 
 function _doJoinConnect(statusEl, errLog, targetCode) {
+  let peerIsReady = false;
   let secondsLeft = 8;
   statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
   const countdownInterval = setInterval(() => {
     secondsLeft--;
-    if (secondsLeft > 0 && peer && !peer.open) {
+    if (secondsLeft > 0 && !peerIsReady) {
       statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
     }
   }, 1000);
 
   const connectionTimeout = setTimeout(() => {
     clearInterval(countdownInterval);
-    if (peer && !peer.open) {
+    if (!peerIsReady) {
       statusEl.innerHTML = '❌ Délai dépassé (8s).<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
-      if (errLog) { errLog.style.display = 'block'; errLog.textContent = "Timeout en attendant le serveur PeerJS."; }
-      try { peer.destroy(); } catch(e) {}
+      if (errLog) { errLog.style.display = 'block'; errLog.textContent = "Timeout en attendant le serveur PeerJS. Le serveur public est probablement surchargé."; }
+      try { if (peer) peer.destroy(); } catch(e) {}
       peer = null;
     }
   }, 8000);
@@ -1762,6 +1765,7 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
   }
   
   peer.on('open', (id) => {
+    peerIsReady = true;
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
     statusEl.textContent = '🔗 Connexion à la partie ' + targetCode + '...';
