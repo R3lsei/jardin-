@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v9 — Aventure de survie</title>
+<title>MICRO-JARDIN v10 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1553,7 +1553,12 @@ function hideMultiplayerMenu(){
 }
 
 function generateRoomCode() {
-  return 'mj-' + Math.floor(1000 + Math.random() * 9000);
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 5; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
 }
 
 function hostGame() {
@@ -1622,8 +1627,9 @@ function _doHostConnect(statusEl, errLog) {
     }
   }, 8000);
 
+  const roomCodeAttempt = generateRoomCode();
   try {
-    peer = new Peer();
+    peer = new Peer(roomCodeAttempt);
   } catch (e) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
@@ -1695,7 +1701,7 @@ function _doHostConnect(statusEl, errLog) {
 function joinGame() {
   const nick = document.getElementById('nicknameInput').value.trim();
   myNickname = nick || 'Client';
-  const targetCode = document.getElementById('roomCodeInput').value.trim().toLowerCase();
+  const targetCode = document.getElementById('roomCodeInput').value.trim().toUpperCase();
   
   const statusEl = document.getElementById('connectionStatus');
   const errLog = document.getElementById('connectionErrorLog');
