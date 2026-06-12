@@ -779,9 +779,13 @@ const ASSETS = {
   water: new Image(),
   darkgrass: new Image(),
   drygrass: new Image(),
-  tree: new Image()
+  tree: new Image(),
+  player: new Image(),
+  spider: new Image(),
+  boss: new Image()
 };
 const patterns = {};
+const sprites = {};
 
 function initAssets(callback) {
   let loaded = 0;
@@ -790,21 +794,41 @@ function initAssets(callback) {
     ASSETS[k].onload = () => {
       loaded++;
       document.getElementById('loadingMsg').textContent = `Chargement des textures (${Math.round((loaded/total)*100)}%)...`;
+      
+      if (['player', 'spider', 'boss'].includes(k)) {
+        const c = document.createElement('canvas');
+        c.width = ASSETS[k].width; c.height = ASSETS[k].height;
+        const ctx = c.getContext('2d', { willReadFrequently: true });
+        ctx.drawImage(ASSETS[k], 0, 0);
+        try {
+          const data = ctx.getImageData(0, 0, c.width, c.height);
+          const d = data.data;
+          for(let i=0; i<d.length; i+=4) {
+            if(d[i]>220 && d[i+1]>220 && d[i+2]>220) d[i+3] = 0;
+          }
+          ctx.putImageData(data, 0, 0);
+          sprites[k] = c;
+        } catch(e) { sprites[k] = ASSETS[k]; }
+      } else {
+        sprites[k] = ASSETS[k];
+      }
+
       if (loaded === total) {
-        patterns[0] = cx.createPattern(ASSETS.grass, 'repeat');
+        patterns[0] = cx.createPattern(sprites.grass, 'repeat');
         patterns[1] = patterns[0];
-        patterns[2] = cx.createPattern(ASSETS.sand, 'repeat');
-        patterns[3] = cx.createPattern(ASSETS.water, 'repeat');
+        patterns[2] = cx.createPattern(sprites.sand, 'repeat');
+        patterns[3] = cx.createPattern(sprites.water, 'repeat');
         patterns[4] = patterns[3];
         patterns[5] = patterns[2];
-        patterns[6] = cx.createPattern(ASSETS.darkgrass, 'repeat');
+        patterns[6] = cx.createPattern(sprites.darkgrass, 'repeat');
         patterns[7] = patterns[2]; // Mud (fallback to sand)
-        patterns[8] = cx.createPattern(ASSETS.drygrass, 'repeat');
+        patterns[8] = cx.createPattern(sprites.drygrass, 'repeat');
         callback();
       }
     };
     ASSETS[k].onerror = () => {
       loaded++;
+      sprites[k] = ASSETS[k];
       if (loaded === total) callback();
     };
     ASSETS[k].src = `./assets/${k}.png`;
@@ -1459,28 +1483,19 @@ function drawEnemy(e,x,y){
   
   if(e.hitT>0){cx.filter='brightness(2)';}
   const t=performance.now()/200;
-  if(e.type==='araignee'||e.boss){
-    const s=e.boss?2.2:1;
-    cx.rotate(e.ang+Math.PI/2);
-    cx.strokeStyle=e.boss?'#15101f':'#262033';cx.lineWidth=2.5*s;cx.lineCap='round';
-    for(let i=0;i<4;i++){
-      const ly=(-9+i*6)*s,sw=Math.sin(t*3+i)*3;
-      cx.beginPath();cx.moveTo(-6*s,ly);cx.lineTo((-16-sw)*s,ly-4*s);cx.lineTo((-20-sw)*s,ly+3*s);cx.stroke();
-      cx.beginPath();cx.moveTo(6*s,ly);cx.lineTo((16+sw)*s,ly-4*s);cx.lineTo((20+sw)*s,ly+3*s);cx.stroke();
-    }
-    cx.fillStyle=e.hue;cx.beginPath();cx.ellipse(0,4*s,9*s,12*s,0,0,7);cx.fill();
-    cx.beginPath();cx.arc(0,-8*s,6.5*s,0,7);cx.fill();
-    cx.fillStyle=e.boss?'#7a2d8c':'#564a6e';cx.beginPath();cx.ellipse(0,5*s,4*s,7*s,0,0,7);cx.fill();
-    cx.fillStyle='#ff4040';
-    for(const dx2 of[-3,-1,1,3])cx.beginPath(),cx.arc(dx2*s*1.4,-11*s,1.2*s,0,7),cx.fill();
-  }else if(e.type==='puceron'){
+  cx.rotate(e.ang+Math.PI/2);
+  
+  if(e.boss && sprites.boss){
+    cx.drawImage(sprites.boss, -30, -30, 60, 60);
+  } else if (e.type==='araignee' && sprites.spider) {
+    cx.drawImage(sprites.spider, -16, -16, 32, 32);
+  } else if(e.type==='puceron'){
     cx.fillStyle=e.hue;cx.beginPath();cx.ellipse(0,0,8,10,0,0,7);cx.fill();
     cx.fillStyle='#c4ec9d';cx.beginPath();cx.ellipse(-2,-3,3,4,0,0,7);cx.fill();
     cx.strokeStyle='#6da14b';cx.lineWidth=1.5;
     cx.beginPath();cx.moveTo(-2,-9);cx.lineTo(-5,-14);cx.moveTo(2,-9);cx.lineTo(5,-14);cx.stroke();
   }else if(e.type==='moustique'){
     const fz=Math.sin(performance.now()/40)*2;
-    cx.rotate(e.ang+Math.PI/2);
     cx.fillStyle='rgba(200,220,235,.5)';
     cx.beginPath();cx.ellipse(-8,fz*0.5,7,3,-.5,0,7);cx.fill();
     cx.beginPath();cx.ellipse(8,-fz*0.5,7,3,.5,0,7);cx.fill();
@@ -1520,10 +1535,13 @@ function drawPlayer(x,y){
   cx.fillStyle='rgba(0,0,0,.35)';cx.beginPath();cx.ellipse(0,5,13,5.5,0,0,7);cx.fill();
   
   if(player.iFrames>0&&performance.now()%200<100){cx.restore();return;}
-  if(has('armure')){cx.fillStyle='#5e4630';cx.beginPath();cx.ellipse(0,4,9,11,0,0,7);cx.fill();}
-  cx.fillStyle='#3f6ea8';cx.beginPath();cx.ellipse(0,3,7,9,0,0,7);cx.fill();
-  cx.fillStyle='#e8b88f';cx.beginPath();cx.arc(0,-8,6,0,7);cx.fill();
-  cx.fillStyle='#d8453c';cx.beginPath();cx.arc(0,-9,6,Math.PI,0);cx.fill();cx.fillRect(-6,-10,12,2.5);
+  
+  if (sprites.player) {
+    cx.drawImage(sprites.player, -12, -20, 24, 24);
+  }
+  
+  if(has('armure')) { cx.font='14px serif'; cx.fillText('🛡️', 6, -12); }
+  
   const wIc=has('epee')?'⚔️':has('lance')?'🗡️':has('hache')?'🪓':null;
   if(wIc){
     const a=player.facing+(player.swing>0?Math.sin(player.swing*30)*0.9:0);
@@ -2233,14 +2251,11 @@ function drawRemotePlayer(rp, x, y) {
   
   cx.fillStyle = 'rgba(0,0,0,.3)'; cx.beginPath(); cx.ellipse(0, 12 - bob, 10, 4, 0, 0, 7); cx.fill();
   
-  if (rp.armor) { cx.fillStyle = '#5e4630'; cx.beginPath(); cx.ellipse(0, 4, 9, 11, 0, 0, 7); cx.fill(); }
+  if (sprites.player) {
+    cx.drawImage(sprites.player, -12, -20, 24, 24);
+  }
   
-  cx.fillStyle = rp.peerId === 'host' ? '#b46ee0' : '#3fa86e';
-  cx.beginPath(); cx.ellipse(0, 3, 7, 9, 0, 0, 7); cx.fill();
-  
-  cx.fillStyle = '#e8b88f'; cx.beginPath(); cx.arc(0, -8, 6, 0, 7); cx.fill();
-  
-  cx.fillStyle = '#d8453c'; cx.beginPath(); cx.arc(0, -9, 6, Math.PI, 0); cx.fill(); cx.fillRect(-6, -10, 12, 2.5);
+  if (rp.armor) { cx.font='14px serif'; cx.fillText('🛡️', 6, -12); }
   
   const hasAxe = rp.inv && rp.inv.hache;
   const hasSword = rp.inv && rp.inv.epee;
@@ -2255,8 +2270,8 @@ function drawRemotePlayer(rp, x, y) {
   
   cx.fillStyle = 'white'; cx.font = 'bold 11px sans-serif'; cx.textAlign = 'center';
   cx.strokeStyle = 'black'; cx.lineWidth = 3;
-  cx.strokeText(rp.nickname || 'Joueur', 0, -22);
-  cx.fillText(rp.nickname || 'Joueur', 0, -22);
+  cx.strokeText(rp.nickname || 'Joueur', 0, -28);
+  cx.fillText(rp.nickname || 'Joueur', 0, -28);
   
   cx.restore();
 }
