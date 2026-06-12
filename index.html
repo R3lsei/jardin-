@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v17 — Aventure de survie</title>
+<title>MICRO-JARDIN v18 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -895,6 +895,22 @@ function loop(t){
 }
 
 function update(dt){
+  // Interpolation multijoueur
+  for (const pid in remotePlayers) {
+    const rp = remotePlayers[pid];
+    if (rp.targetX !== undefined) {
+      rp.x += (rp.targetX - rp.x) * 12 * dt;
+      rp.y += (rp.targetY - rp.y) * 12 * dt;
+    }
+    if (rp.iFrames > 0) rp.iFrames -= dt;
+  }
+  for (const e of enemies) {
+    if (netMode === 'client' && e.targetX !== undefined) {
+      e.x += (e.targetX - e.x) * 12 * dt;
+      e.y += (e.targetY - e.y) * 12 * dt;
+    }
+  }
+
   if (netMode === 'client') {
     st.timeAlive += dt;
     player.food = clamp(player.food - dt * 0.55, 0, 100);
@@ -946,11 +962,6 @@ function update(dt){
     return;
   }
 
-  // Remote player iFrames decr
-  for (const pid in remotePlayers) {
-    const rp = remotePlayers[pid];
-    if (rp.iFrames > 0) rp.iFrames -= dt;
-  }
 
   st.timeAlive+=dt;
   /* temps */
@@ -1847,22 +1858,21 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
 
 function handleHostMessage(clientPeerId, data) {
   if (data.type === 'clientUpdate') {
-    remotePlayers[clientPeerId] = {
-      peerId: clientPeerId,
-      x: data.x,
-      y: data.y,
-      facing: data.facing,
-      hp: data.hp,
-      food: data.food,
-      water: data.water,
-      swing: data.swing,
-      nickname: data.nickname,
-      armor: data.armor,
-      torchOn: data.torchOn,
-      inv: data.inv,
-      iFrames: (remotePlayers[clientPeerId] ? remotePlayers[clientPeerId].iFrames : 0),
-      lastSeen: performance.now()
-    };
+    if (!remotePlayers[clientPeerId]) {
+      remotePlayers[clientPeerId] = {
+        peerId: clientPeerId,
+        x: data.x, y: data.y, targetX: data.x, targetY: data.y,
+        facing: data.facing, hp: data.hp, food: data.food, water: data.water,
+        swing: data.swing, nickname: data.nickname, armor: data.armor,
+        torchOn: data.torchOn, inv: data.inv, iFrames: 0, lastSeen: performance.now()
+      };
+    } else {
+      const rp = remotePlayers[clientPeerId];
+      rp.targetX = data.x; rp.targetY = data.y;
+      rp.facing = data.facing; rp.hp = data.hp; rp.food = data.food; rp.water = data.water;
+      rp.swing = data.swing; rp.armor = data.armor; rp.torchOn = data.torchOn;
+      rp.inv = data.inv; rp.lastSeen = performance.now();
+    }
   } else if (data.type === 'action') {
     if (data.action === 'attack') {
       const rp = remotePlayers[clientPeerId];
@@ -1915,8 +1925,31 @@ function handleClientMessage(data) {
       moveEntity(player,Math.cos(data.ang)*16,Math.sin(data.ang)*16);
     }
   } else if (data.type === 'sync') {
-    remotePlayers = data.players;
-    enemies = data.enemies;
+    for (const pid in data.players) {
+      if (peer && pid === peer.id) continue;
+      const sp = data.players[pid];
+      if (!remotePlayers[pid]) {
+        remotePlayers[pid] = { ...sp, targetX: sp.x, targetY: sp.y };
+      } else {
+        const rp = remotePlayers[pid];
+        rp.targetX = sp.x; rp.targetY = sp.y;
+        rp.facing = sp.facing; rp.hp = sp.hp; rp.food = sp.food; rp.water = sp.water;
+        rp.swing = sp.swing; rp.armor = sp.armor; rp.torchOn = sp.torchOn;
+        if (sp.nickname) rp.nickname = sp.nickname;
+      }
+    }
+    for (const pid in remotePlayers) if (!data.players[pid] && pid !== 'host') delete remotePlayers[pid];
+
+    for (const se of data.enemies) {
+      let e = enemies.find(x => x.id === se.id);
+      if (!e) enemies.push({ ...se, targetX: se.x, targetY: se.y });
+      else {
+        e.targetX = se.x; e.targetY = se.y;
+        e.hp = se.hp; e.ang = se.ang; e.hitT = se.hitT;
+      }
+    }
+    enemies = enemies.filter(e => data.enemies.some(se => se.id === e.id));
+
     resources = data.resources;
     trees = data.trees;
     placed = data.placed;
