@@ -1569,7 +1569,7 @@ function hostGame() {
   }, 10000);
 
   try {
-    peer = new Peer(roomCodeAttempt, {
+    peer = new Peer({
       key: 'peerjs',
       debug: 3
     });
