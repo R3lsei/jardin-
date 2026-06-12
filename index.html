@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MICRO-JARDIN — Aventure de survie</title>
+<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 <style>
   :root{
     --moss:#1d3a1d; --moss-deep:#0e2410; --amber:#f2b441; --amber-dark:#c98a1b;
@@ -116,6 +117,7 @@
   <div class="bar"><div class="fill" id="waterFill"></div><div class="lab"><span>💧 SOIF</span><span id="waterTxt"></span></div></div>
 </div>
 <div class="hud" id="clock">
+  <div id="roomCodeDisplay" style="display:none; background:#b46ee0; border:1px solid #894dae; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:1px; margin-bottom:6px; cursor:pointer;" onclick="navigator.clipboard.writeText(this.dataset.code); msg('📋 Code copié !','good');">🔑 CODE: <span id="roomCodeVal">-</span></div>
   <div id="dayLabel">☀ JOUR 1</div>
   <div id="biomeLabel">Prairie</div>
   <canvas id="minimap" width="150" height="150"></canvas>
@@ -164,7 +166,22 @@
     <b>T</b><span>Se téléporter à son lit</span>
     <b>Maj</b><span>Sprinter</span>
   </div>
-  <button class="bigbtn" onclick="startGame()">▶ Commencer l'aventure</button>
+  <div id="menuButtons" style="display:flex; gap:16px; margin-top:10px;">
+    <button class="bigbtn" onclick="startGame()">▶ Mode Solo</button>
+    <button class="bigbtn" style="background:#b46ee0; box-shadow:0 5px 0 #894dae,0 10px 24px rgba(0,0,0,.5);" onclick="showMultiplayerMenu()">👥 Multijoueur</button>
+  </div>
+
+  <div id="multiplayerMenu" style="display:none; flex-direction:column; gap:12px; margin-top:20px; width:100%; max-width:400px; background:rgba(0,0,0,0.5); padding:16px; border-radius:12px; border:1px solid var(--panel-line); align-items:center;">
+    <h3 style="color:var(--amber); letter-spacing:2px; font-size:14px; text-transform:uppercase; margin-bottom:4px;">Configuration Multijoueur</h3>
+    <input type="text" id="nicknameInput" placeholder="Votre Pseudo" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center;" value="Joueur">
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;">
+      <button class="bigbtn" style="font-size:12px; padding:12px; width:100%; box-shadow:none; border-radius:8px; text-shadow:none;" onclick="hostGame()">Créer Partie</button>
+      <button class="bigbtn" style="font-size:12px; padding:12px; width:100%; box-shadow:none; border-radius:8px; background:#5aa8d8; color:#0b253a; text-shadow:none;" onclick="joinGame()">Rejoindre</button>
+    </div>
+    <input type="text" id="roomCodeInput" placeholder="Code de la partie (ex: m-j-1234)" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center;">
+    <div id="connectionStatus" style="font-size:12px; color:var(--amber); font-weight:bold; height:18px;"></div>
+    <button class="bigbtn" style="font-size:11px; padding:6px 14px; background:#e0584e; color:white; border-radius:6px; box-shadow:none; text-transform:none; font-weight:normal; text-shadow:none;" onclick="hideMultiplayerMenu()">Retour</button>
+  </div>
 </div>
 
 <div class="screen" id="deathScreen">
@@ -184,6 +201,16 @@
 
 <script>
 "use strict";
+/* ---------- MULTIJOUEUR GLOBALS ---------- */
+let netMode = 'solo'; // 'solo', 'host', 'client'
+let myNickname = 'Joueur';
+let peer = null;
+let conn = null; // Client side connection to Host
+let connections = []; // Host side list of connections to Clients
+let remotePlayers = {}; // peerId -> player details
+let nextNetId = 1;
+const getNetId = () => nextNetId++;
+
 /* =========================================================
    MICRO-JARDIN v2 — biomes, arbres, lacs, base building
    ========================================================= */
@@ -337,7 +364,7 @@ function spawnResources(){
       if(!d.tile.includes(map[ty*MW+tx]))continue;
       const x=tx*TS+TS/2+R(-8,8),y=ty*TS+TS/2+R(-8,8);
       if(Math.hypot(x-SPAWN.x,y-SPAWN.y)<60)continue;
-      resources.push({type:d.t,x,y,hp:d.hp,maxhp:d.hp,gives:d.gives,amt:d.amt,n:names[d.t],wob:R(0,6.28)});
+      resources.push({id: getNetId(), type:d.t,x,y,hp:d.hp,maxhp:d.hp,gives:d.gives,amt:d.amt,n:names[d.t],wob:R(0,6.28)});
       placedN++;
     }
   }
@@ -357,7 +384,7 @@ function spawnTrees(){
     if(Math.hypot(x-BOSS_LAIR.x,y-BOSS_LAIR.y)<200)continue;
     if(trees.some(tr=>Math.hypot(tr.x-x,tr.y-y)<60))continue;
     const swamp=b===2;
-    trees.push({x,y,hp:6,maxhp:6,r:13,size:R(0.85,1.3),swamp,sway:R(0,6.28)});
+    trees.push({id: getNetId(), x,y,hp:6,maxhp:6,r:13,size:R(0.85,1.3),swamp,sway:R(0,6.28)});
     n++;
   }
 }
@@ -371,7 +398,7 @@ const ENEMY_DEFS={
 };
 function spawnEnemy(type,x,y){
   const d=ENEMY_DEFS[type];
-  enemies.push({type,...structuredClone(d),x,y,maxhp:d.hp,vx:0,vy:0,state:'wander',wt:R(0,3),cd:0,hitT:0,ang:R(0,6.28),def:d});
+  enemies.push({id: getNetId(), type,...structuredClone(d),x,y,maxhp:d.hp,vx:0,vy:0,state:'wander',wt:R(0,3),cd:0,hitT:0,ang:R(0,6.28),def:d});
 }
 function populateEnemies(){
   enemies=[];
@@ -511,7 +538,12 @@ function useHotbar(i){
 /* ---------- CONSTRUCTION ---------- */
 function tryPlace(it){
   if(it==='feu'){
-    fires.push({x:player.x,y:player.y+4,t:0});take(it);
+    if (netMode === 'client') {
+      conn.send({ type: 'action', action: 'place', item: 'feu' });
+      take(it);
+      return;
+    }
+    fires.push({id: getNetId(), x:player.x,y:player.y+4,t:0});take(it);
     if(!getBed())player.spawnPoint={x:player.x,y:player.y};
     msg('🏕️ Feu de camp placé.','good');beep(300,.2,'triangle');
     return;
@@ -534,7 +566,14 @@ function tryPlace(it){
   const cxw=tx*TS+TS/2,cyw=ty*TS+TS/2;
   if(Math.hypot(cxw-player.x,cyw-player.y)<player.r+14&&it==='mur'){msg('⛔ Tu es dans le passage !','bad');return;}
   if(trees.some(t=>Math.hypot(t.x-cxw,t.y-cyw)<30)){msg('⛔ Un arbre gêne la construction.','bad');return;}
-  const s={type:it,tx,ty,x:cxw,y:cyw,hp:it==='mur'?60:80,maxhp:it==='mur'?60:80};
+  
+  if (netMode === 'client') {
+    conn.send({ type: 'action', action: 'place', item: it, tx: tx, ty: ty });
+    take(it);
+    return;
+  }
+  
+  const s={id: getNetId(), type:it,tx,ty,x:cxw,y:cyw,hp:it==='mur'?60:80,maxhp:it==='mur'?60:80};
   if(it==='coffre')s.inv={};
   placed.push(s);structGrid[skey(tx,ty)]=s;
   take(it);player.built++;
@@ -624,7 +663,12 @@ function renderChest(){
   for(const[k,v]of pEntries){
     const d=document.createElement('div');d.className='invItem click';
     d.innerHTML=`<span class="ic">${ITEMS[k].ic}</span>${ITEMS[k].n}<span class="qty">×${v} →</span>`;
-    d.onclick=()=>{openChest.inv[k]=(openChest.inv[k]||0)+v;take(k,v);renderChest();beep(400,.05,'sine',.05);};
+    d.onclick=()=>{
+      if (netMode === 'client') {
+        conn.send({ type: 'action', action: 'chestTransfer', chestId: openChest.id, item: k, direction: 'toChest' });
+      }
+      openChest.inv[k]=(openChest.inv[k]||0)+v;take(k,v);renderChest();beep(400,.05,'sine',.05);
+    };
     pe.appendChild(d);
   }
   const cEntries=Object.entries(openChest.inv);
@@ -632,7 +676,12 @@ function renderChest(){
   for(const[k,v]of cEntries){
     const d=document.createElement('div');d.className='invItem click';
     d.innerHTML=`<span class="ic">${ITEMS[k].ic}</span>${ITEMS[k].n}<span class="qty">← ×${v}</span>`;
-    d.onclick=()=>{give(k,v);delete openChest.inv[k];renderChest();beep(500,.05,'sine',.05);};
+    d.onclick=()=>{
+      if (netMode === 'client') {
+        conn.send({ type: 'action', action: 'chestTransfer', chestId: openChest.id, item: k, direction: 'toPlayer' });
+      }
+      give(k,v);delete openChest.inv[k];renderChest();beep(500,.05,'sine',.05);
+    };
     ce.appendChild(d);
   }
 }
@@ -642,6 +691,12 @@ function tryInteract(){
   // 1. coffre proche ?
   const chest=placed.find(s=>s.type==='coffre'&&dist(player,s)<55);
   if(chest){if(chestOpen)closeChest();else openChestUI(chest);return;}
+  
+  if (netMode === 'client') {
+    conn.send({ type: 'action', action: 'interact' });
+    return;
+  }
+  
   // 2. lit la nuit ?
   const bed=getBed();
   if(bed&&dist(player,bed)<55&&isNight()){sleepInBed();return;}
@@ -656,9 +711,8 @@ function tryInteract(){
     particles.push(...burst(bestT.x,bestT.y-20,5,'#8a5a2e'));
     if(bestT.hp<=0){
       const n=3+Math.floor(R(0,3));
-      give('bois',n);st.woodTotal+=n;player.harvested+=n;
-      if(Math.random()<0.5)give('seve',1);
-      floaty(bestT.x,bestT.y-20,`+${n} 🟫`);
+      for(let i=0;i<n;i++)drops.push({id: getNetId(), x:bestT.x+R(-10,10),y:bestT.y+R(-10,10),it:'bois',bob:R(0,6)});
+      if(Math.random()<0.5)drops.push({id: getNetId(), x:bestT.x,y:bestT.y,it:'seve',bob:R(0,6)});
       trees.splice(trees.indexOf(bestT),1);
       msg('🌳 Arbre abattu !','good');beep(90,.2,'square',.09);
       particles.push(...burst(bestT.x,bestT.y,18,'#5a8a3a'));
@@ -678,8 +732,7 @@ function tryHarvest(){
   particles.push(...burst(best.x,best.y,5,'#cdebb0'));
   if(best.hp<=0){
     const n=Math.floor(R(best.amt[0],best.amt[1]+1));
-    give(best.gives,n);player.harvested+=n;
-    floaty(best.x,best.y-14,`+${n} ${ITEMS[best.gives].ic}`);
+    for(let i=0;i<n;i++)drops.push({id: getNetId(), x:best.x+R(-10,10),y:best.y+R(-10,10),it:best.gives,bob:R(0,6)});
     resources.splice(resources.indexOf(best),1);
     beep(500,.08,'sine');
   }
@@ -693,6 +746,18 @@ function tryAttack(){
   const dmg=weaponDmg(),range=46;
   const wx=mouse.x+cam.x,wy=mouse.y+cam.y;
   player.facing=Math.atan2(wy-player.y,wx-player.x);
+  
+  if (netMode === 'client') {
+    conn.send({
+      type: 'action',
+      action: 'attack',
+      facing: player.facing,
+      dmg: dmg
+    });
+    player.swing=0.2;
+    return;
+  }
+  
   let hit=false;
   for(const e of enemies){
     const d=dist(player,e);
@@ -722,8 +787,8 @@ function tryAttack(){
           beep(110,.07,'square',.06);
           if(s.hp<=0){
             placed.splice(placed.indexOf(s),1);delete structGrid[skey(s.tx,s.ty)];
-            if(s.type==='mur'){st.wallsBuilt=Math.max(0,st.wallsBuilt-1);drops.push({x:s.x,y:s.y,it:'bois',bob:0});}
-            if(s.type==='coffre'&&s.inv)for(const[k,v]of Object.entries(s.inv))for(let i=0;i<Math.min(v,8);i++)drops.push({x:s.x+R(-12,12),y:s.y+R(-12,12),it:k,bob:R(0,6)});
+            if(s.type==='mur'){st.wallsBuilt=Math.max(0,st.wallsBuilt-1);drops.push({id: getNetId(), x:s.x,y:s.y,it:'bois',bob:0});}
+            if(s.type==='coffre'&&s.inv)for(const[k,v]of Object.entries(s.inv))for(let i=0;i<Math.min(v,8);i++)drops.push({id: getNetId(), x:s.x+R(-12,12),y:s.y+R(-12,12),it:k,bob:R(0,6)});
             msg(`💥 ${ITEMS[s.type].n} détruit.`,'bad');
           }
           break;
@@ -740,7 +805,7 @@ function killEnemy(e){
   if(e.type==='soldat')st.soldierKills++;
   for(const[it,[a,b]]of Object.entries(e.drops||{})){
     const n=Math.floor(R(a,b+1));
-    for(let i=0;i<n;i++)drops.push({x:e.x+R(-10,10),y:e.y+R(-10,10),it,bob:R(0,6)});
+    for(let i=0;i<n;i++)drops.push({id: getNetId(), x:e.x+R(-10,10),y:e.y+R(-10,10),it,bob:R(0,6)});
   }
   particles.push(...burst(e.x,e.y,14,e.hue));
   if(e.boss){
@@ -796,6 +861,63 @@ function loop(t){
 }
 
 function update(dt){
+  if (netMode === 'client') {
+    st.timeAlive += dt;
+    player.food = clamp(player.food - dt * 0.55, 0, 100);
+    player.water = clamp(player.water - dt * 0.75, 0, 100);
+    if (player.food <= 0 || player.water <= 0) {
+      player.hp -= dt * 4;
+      if (Math.random() < dt) msg(player.food <= 0 ? '🍖 Tu meurs de faim !' : '💧 Tu meurs de soif !', 'bad');
+    }
+    
+    // Movement
+    let dx = 0, dy = 0;
+    if (keys.KeyW || keys.KeyZ || keys.ArrowUp) dy -= 1;
+    if (keys.KeyS || keys.ArrowDown) dy += 1;
+    if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) dx -= 1;
+    if (keys.KeyD || keys.ArrowRight) dx += 1;
+    const sprint = (keys.ShiftLeft || keys.ShiftRight) && player.food > 5;
+    const onMud = map[(player.y / TS | 0) * MW + (player.x / TS | 0)] === 7;
+    let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1);
+    if (sprint && (dx || dy)) player.food = clamp(player.food - dt * 2.4, 0, 100);
+    if (dx && dy) { dx *= 0.707; dy *= 0.707; }
+    if (dx || dy) {
+      moveEntity(player, dx * spd * dt, dy * spd * dt);
+      player.walkT = (player.walkT || 0) + dt * 8;
+    }
+    player.atkCd = Math.max(0, player.atkCd - dt);
+    player.iFrames = Math.max(0, player.iFrames - dt);
+    player.swing = Math.max(0, (player.swing || 0) - dt);
+    
+    sendClientUpdate();
+    
+    for (const p of particles) { p.t -= dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= 0.92; p.vy *= 0.92; }
+    for (const f of floaties) { f.t -= dt; f.y -= 28 * dt; }
+    for (const t of trees) t.shake = Math.max(0, (t.shake || 0) - dt);
+    
+    setBar('hp', player.hp, player.maxhp); setBar('food', player.food, 100); setBar('water', player.water, 100);
+    document.getElementById('dayLabel').textContent = (isNight() ? '🌙 NUIT ' : '☀ JOUR ') + st.day;
+    const pb = biomeMap[(player.y / TS | 0) * MW + (player.x / TS | 0)];
+    document.getElementById('biomeLabel').textContent = BIOME_NAMES[pb] || '';
+    
+    const q2 = QUESTS[questIdx];
+    if (q2) { document.getElementById('questTitle').textContent = q2.t; document.getElementById('questDesc').textContent = q2.d; document.getElementById('questProg').textContent = q2.prog(); }
+    else { document.getElementById('questTitle').textContent = 'Libre comme l\'air'; document.getElementById('questDesc').textContent = 'Explore le micro-jardin.'; document.getElementById('questProg').textContent = ''; }
+    
+    const boss = enemies.find(e => e.boss);
+    const bb = document.getElementById('bossBar');
+    if (boss && dist(boss, player) < 560) { bb.style.display = 'block'; document.getElementById('bossFill').style.width = (boss.hp / boss.maxhp * 100) + '%'; }
+    else bb.style.display = 'none';
+    
+    return;
+  }
+
+  // Remote player iFrames decr
+  for (const pid in remotePlayers) {
+    const rp = remotePlayers[pid];
+    if (rp.iFrames > 0) rp.iFrames -= dt;
+  }
+
   st.timeAlive+=dt;
   /* temps */
   timeOfDay+=dt;
@@ -853,29 +975,53 @@ function update(dt){
   const night=isNight();
   for(const e of enemies){
     e.cd=Math.max(0,e.cd-dt);e.hitT=Math.max(0,e.hitT-dt);
-    const dp=dist(e,player);
+    
+    // Find closest player
+    let closestP = player;
+    let closestD = dist(e, player);
+    for (const pid in remotePlayers) {
+      const rp = remotePlayers[pid];
+      const d = dist(e, rp);
+      if (d < closestD) {
+        closestD = d;
+        closestP = rp;
+      }
+    }
+    const dp = closestD;
+    
     let aggro=e.aggro;
     if(e.night&&!night)aggro*=0.3;
     if(player.torchOn&&e.type==='araignee')aggro*=0.6;
     if(e.state==='flee'){
       e.wt-=dt;
-      const a=Math.atan2(e.y-player.y,e.x-player.x);
+      const a=Math.atan2(e.y-closestP.y,e.x-closestP.x);
       e.vx=Math.cos(a)*e.spd*1.3;e.vy=Math.sin(a)*e.spd*1.3;
       if(e.wt<=0)e.state='wander';
     }else if(!e.passive&&(e.state==='chase'||(aggro&&dp<aggro))){
       e.state='chase';
       if(dp>aggro*1.6&&!e.boss)e.state='wander';
-      const a=Math.atan2(player.y-e.y,player.x-e.x);
+      const a=Math.atan2(closestP.y-e.y,closestP.x-e.x);
       e.vx=Math.cos(a)*e.spd;e.vy=Math.sin(a)*e.spd;e.ang=a;
-      if(dp<e.r+player.r+6&&e.cd<=0){
+      if(dp<e.r+closestP.r+6&&e.cd<=0){
         e.cd=e.boss?0.8:1.1;
-        if(player.iFrames<=0){
-          const dmg=Math.round(e.dmg*armorMul());
-          player.hp-=dmg;player.iFrames=0.4;
-          floaty(player.x,player.y-22,'-'+dmg,'#ff5a4d');
-          dmgFlash();beep(100,.15,'sawtooth',.1);
-          const ka=Math.atan2(player.y-e.y,player.x-e.x);
-          moveEntity(player,Math.cos(ka)*16,Math.sin(ka)*16);
+        if (closestP === player) {
+          if(player.iFrames<=0){
+            const dmg=Math.round(e.dmg*armorMul());
+            player.hp-=dmg;player.iFrames=0.4;
+            floaty(player.x,player.y-22,'-'+dmg,'#ff5a4d');
+            dmgFlash();beep(100,.15,'sawtooth',.1);
+            const ka=Math.atan2(player.y-e.y,player.x-e.x);
+            moveEntity(player,Math.cos(ka)*16,Math.sin(ka)*16);
+          }
+        } else {
+          if (!closestP.iFrames || closestP.iFrames <= 0) {
+            const rpArmorMul = closestP.armor ? 0.55 : 1;
+            const dmg = Math.round(e.dmg * rpArmorMul);
+            closestP.hp = Math.max(0, closestP.hp - dmg);
+            closestP.iFrames = 0.4;
+            floaties.push({ x: closestP.x, y: closestP.y - 22, txt: '-' + dmg, col: '#ff5a4d', t: 1 });
+            particles.push(...burst(closestP.x, closestP.y, 8, '#ff5a4d'));
+          }
         }
       }
     }else{
@@ -917,6 +1063,17 @@ function update(dt){
     running=false;player.deaths++;closeChest();closeCraft();
     document.getElementById('deathStats').innerHTML=`Tu as survécu <b>${st.day}</b> jour(s).<br>⚔ ${player.kills} créatures vaincues · 🏗 ${player.built} constructions`;
     document.getElementById('deathScreen').style.display='flex';
+  }
+
+  setBar('hp',player.hp,player.maxhp);setBar('food',player.food,100);setBar('water',player.water,100);
+  const q2=QUESTS[questIdx];
+  if(q2){document.getElementById('questTitle').textContent=q2.t;document.getElementById('questDesc').textContent=q2.d;document.getElementById('questProg').textContent=q2.prog();}
+  else{document.getElementById('questTitle').textContent='Libre comme l\'air';document.getElementById('questDesc').textContent='Explore le micro-jardin.';document.getElementById('questProg').textContent='';}
+
+  if (netMode === 'host') {
+    broadcastSync();
+  }
+}eathScreen').style.display='flex';
   }
 
   setBar('hp',player.hp,player.maxhp);setBar('food',player.food,100);setBar('water',player.water,100);
@@ -1023,6 +1180,19 @@ function render(){
     const sx=e.x-cam.x,sy=e.y-cam.y;
     if(sx<-60||sy<-60||sx>cv.width+60||sy>cv.height+60)continue;
     drawEnemy(e,sx,sy);
+  }
+
+  /* joueurs distants */
+  for (const pid in remotePlayers) {
+    if (peer && pid === peer.id) continue;
+    if (netMode === 'host' && pid === 'host') continue;
+    
+    const rp = remotePlayers[pid];
+    const rx = rp.x - cam.x;
+    const ry = rp.y - cam.y;
+    if (rx < -40 || ry < -40 || rx > cv.width + 40 || ry > cv.height + 40) continue;
+    
+    drawRemotePlayer(rp, rx, ry);
   }
 
   /* joueur */
@@ -1346,6 +1516,474 @@ function drawMinimapLive(){
   mmCx.beginPath();mmCx.arc(player.x/WPX*150,player.y/HPX*150,3,0,7);mmCx.fill();mmCx.stroke();
   if(isNight()){mmCx.fillStyle='rgba(10,10,40,.4)';mmCx.fillRect(0,0,150,150);}
 }
+
+/* ---------- NETWORKING AND MULTIPLAYER ---------- */
+function showMultiplayerMenu(){
+  document.getElementById('menuButtons').style.display = 'none';
+  document.getElementById('multiplayerMenu').style.display = 'flex';
+}
+function hideMultiplayerMenu(){
+  document.getElementById('menuButtons').style.display = 'flex';
+  document.getElementById('multiplayerMenu').style.display = 'none';
+  document.getElementById('connectionStatus').textContent = '';
+}
+
+function generateRoomCode() {
+  return 'mj-' + Math.floor(1000 + Math.random() * 9000);
+}
+
+function hostGame() {
+  const nick = document.getElementById('nicknameInput').value.trim();
+  myNickname = nick || 'Hôte';
+  netMode = 'host';
+  const roomCodeAttempt = generateRoomCode();
+  
+  document.getElementById('connectionStatus').textContent = 'Création du serveur PeerJS...';
+  
+  peer = new Peer(roomCodeAttempt);
+  
+  peer.on('open', (id) => {
+    roomCode = id;
+    document.getElementById('connectionStatus').textContent = 'Partie créée ! Code : ' + id;
+    document.getElementById('roomCodeDisplay').style.display = 'block';
+    document.getElementById('roomCodeDisplay').dataset.code = id;
+    document.getElementById('roomCodeVal').textContent = id;
+    
+    startGame();
+  });
+  
+  peer.on('connection', (c) => {
+    connections.push(c);
+    c.on('open', () => {
+      msg('👤 Un joueur rejoint la partie !', 'good');
+      c.send({
+        type: 'init',
+        seed: seed,
+        map: Array.from(map),
+        biomeMap: Array.from(biomeMap),
+        resources: resources,
+        trees: trees,
+        placed: placed,
+        fires: fires,
+        drops: drops,
+        nextNetId: nextNetId,
+        timeOfDay: timeOfDay,
+        day: st.day,
+        questIdx: questIdx
+      });
+    });
+    
+    c.on('data', (data) => {
+      handleHostMessage(c.peer, data);
+    });
+    
+    c.on('close', () => {
+      const rp = remotePlayers[c.peer];
+      msg('👤 ' + (rp ? rp.nickname : 'Un joueur') + ' a quitté la partie.', 'bad');
+      delete remotePlayers[c.peer];
+      connections = connections.filter(x => x !== c);
+    });
+  });
+  
+  peer.on('error', (err) => {
+    console.error(err);
+    document.getElementById('connectionStatus').textContent = 'Erreur lors de la création : ' + err.type;
+  });
+}
+
+function joinGame() {
+  const nick = document.getElementById('nicknameInput').value.trim();
+  myNickname = nick || 'Client';
+  const targetCode = document.getElementById('roomCodeInput').value.trim().toLowerCase();
+  
+  if (!targetCode) {
+    document.getElementById('connectionStatus').textContent = 'Veuillez entrer un code !';
+    return;
+  }
+  
+  netMode = 'client';
+  document.getElementById('connectionStatus').textContent = 'Connexion à PeerJS...';
+  
+  peer = new Peer();
+  
+  peer.on('open', (id) => {
+    document.getElementById('connectionStatus').textContent = 'Connexion à la partie ' + targetCode + '...';
+    conn = peer.connect(targetCode);
+    
+    conn.on('open', () => {
+      document.getElementById('connectionStatus').textContent = 'Connecté ! Chargement du monde...';
+    });
+    
+    conn.on('data', (data) => {
+      handleClientMessage(data);
+    });
+    
+    conn.on('close', () => {
+      msg('🔌 Déconnecté de l\'hôte.', 'bad');
+      setTimeout(() => location.reload(), 1500);
+    });
+  });
+  
+  peer.on('error', (err) => {
+    console.error(err);
+    document.getElementById('connectionStatus').textContent = 'Erreur de connexion : ' + err.type;
+  });
+}
+
+function handleHostMessage(clientPeerId, data) {
+  if (data.type === 'clientUpdate') {
+    remotePlayers[clientPeerId] = {
+      peerId: clientPeerId,
+      x: data.x,
+      y: data.y,
+      facing: data.facing,
+      hp: data.hp,
+      food: data.food,
+      water: data.water,
+      swing: data.swing,
+      nickname: data.nickname,
+      armor: data.armor,
+      torchOn: data.torchOn,
+      inv: data.inv,
+      iFrames: (remotePlayers[clientPeerId] ? remotePlayers[clientPeerId].iFrames : 0),
+      lastSeen: performance.now()
+    };
+  } else if (data.type === 'action') {
+    if (data.action === 'attack') {
+      const rp = remotePlayers[clientPeerId];
+      if (rp) processPlayerAttack(rp, data.dmg, data.facing);
+    } else if (data.action === 'interact') {
+      const rp = remotePlayers[clientPeerId];
+      if (rp) processPlayerInteract(rp);
+    } else if (data.action === 'place') {
+      const rp = remotePlayers[clientPeerId];
+      if (rp) processPlayerPlace(rp, data.item, data.tx, data.ty);
+    } else if (data.action === 'chestTransfer') {
+      const rp = remotePlayers[clientPeerId];
+      if (rp) processChestTransfer(rp, data);
+    }
+  }
+}
+
+function handleClientMessage(data) {
+  if (data.type === 'init') {
+    seed = data.seed;
+    map.set(data.map);
+    biomeMap.set(data.biomeMap);
+    resources = data.resources;
+    trees = data.trees;
+    placed = data.placed;
+    fires = data.fires;
+    drops = data.drops;
+    nextNetId = data.nextNetId;
+    timeOfDay = data.timeOfDay;
+    st.day = data.day;
+    questIdx = data.questIdx;
+    
+    // Rebuild grid
+    for (const key in structGrid) delete structGrid[key];
+    for (const s of placed) structGrid[skey(s.tx, s.ty)] = s;
+    
+    drawMinimapBase();
+    
+    document.getElementById('titleScreen').style.display = 'none';
+    running = true;
+    msg('🎮 Connecté ! Aventure multijoueur commencée.', 'good');
+    requestAnimationFrame(loop);
+  } else if (data.type === 'sync') {
+    remotePlayers = data.players;
+    enemies = data.enemies;
+    resources = data.resources;
+    trees = data.trees;
+    placed = data.placed;
+    fires = data.fires;
+    drops = data.drops;
+    particles = data.particles;
+    floaties = data.floaties;
+    timeOfDay = data.timeOfDay;
+    st.day = data.day;
+    questIdx = data.questIdx;
+    
+    // Rebuild structures grid
+    for (const key in structGrid) delete structGrid[key];
+    for (const s of placed) structGrid[skey(s.tx, s.ty)] = s;
+    
+    // Update local stats from server sync
+    if (peer && data.players[peer.id]) {
+      player.hp = data.players[peer.id].hp;
+    }
+  }
+}
+
+function sendClientUpdate(){
+  if (netMode === 'client' && conn && conn.open) {
+    conn.send({
+      type: 'clientUpdate',
+      x: player.x,
+      y: player.y,
+      facing: player.facing,
+      hp: player.hp,
+      food: player.food,
+      water: player.water,
+      swing: player.swing,
+      nickname: myNickname,
+      armor: has('armure'),
+      torchOn: player.torchOn,
+      inv: player.inv
+    });
+  }
+}
+
+function processPlayerAttack(p, dmg, facing) {
+  const range = 46;
+  let hit = false;
+  for (const e of enemies) {
+    const d = dist(p, e);
+    if (d < range + e.r) {
+      const ang = Math.atan2(e.y - p.y, e.x - p.x);
+      let diff = Math.abs(((ang - facing) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+      if (diff < 1.4 || d < e.r + 16) {
+        e.hp -= dmg; e.hitT = 0.18; hit = true;
+        e.vx += Math.cos(ang) * 120; e.vy += Math.sin(ang) * 120;
+        if (e.passive) e.state = 'flee', e.wt = 3;
+        if (e.def.neutral) e.state = 'chase';
+        floaties.push({ x: e.x, y: e.y - e.r - 6, txt: '-' + dmg, col: '#ff8a7a', t: 1 });
+        particles.push(...burst(e.x, e.y, 6, e.hue));
+        if (e.hp <= 0) killEnemy(e);
+      }
+    }
+  }
+  if (!hit) {
+    for (const s of placed) {
+      if (Math.hypot(s.x - p.x, s.y - p.y) < range + 18) {
+        const ang = Math.atan2(s.y - p.y, s.x - p.x);
+        let diff = Math.abs(((ang - facing) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+        if (diff < 0.9) {
+          s.hp -= dmg; hit = true;
+          particles.push(...burst(s.x, s.y, 5, '#a07040'));
+          if (s.hp <= 0) {
+            placed.splice(placed.indexOf(s), 1); delete structGrid[skey(s.tx, s.ty)];
+            if (s.type === 'mur') { st.wallsBuilt = Math.max(0, st.wallsBuilt - 1); drops.push({ id: getNetId(), x: s.x, y: s.y, it: 'bois', bob: 0 }); }
+            if (s.type === 'coffre' && s.inv) {
+              for (const [k, v] of Object.entries(s.inv)) {
+                for (let i = 0; i < Math.min(v, 8); i++) drops.push({ id: getNetId(), x: s.x + R(-12, 12), y: s.y + R(-12, 12), it: k, bob: R(0, 6) });
+              }
+            }
+          }
+          break;
+        }
+      }
+    }
+  }
+  p.swing = 0.2;
+}
+
+function processPlayerInteract(p) {
+  const bed = placed.find(s => s.type === 'lit' && Math.hypot(p.x - s.x, p.y - s.y) < 55);
+  if (bed && isNight()) {
+    sleepInBed();
+    return;
+  }
+  
+  let bestT = null, bdT = 52;
+  for (const t of trees) { const d = Math.hypot(p.x - t.x, p.y - t.y); if (d < bdT) { bdT = d; bestT = t; } }
+  if (bestT) {
+    if (!(p.inv['hache'] > 0)) return;
+    bestT.hp--; bestT.shake = 0.25;
+    particles.push(...burst(bestT.x, bestT.y - 20, 5, '#8a5a2e'));
+    if (bestT.hp <= 0) {
+      const n = 3 + Math.floor(R(0, 3));
+      for (let i = 0; i < n; i++) drops.push({ id: getNetId(), x: bestT.x + R(-10, 10), y: bestT.y + R(-10, 10), it: 'bois', bob: R(0, 6) });
+      if (Math.random() < 0.5) drops.push({ id: getNetId(), x: bestT.x, y: bestT.y, it: 'seve', bob: R(0, 6) });
+      trees.splice(trees.indexOf(bestT), 1);
+    }
+    return;
+  }
+
+  let best = null, bd = 46;
+  for (const r of resources) { const d = Math.hypot(p.x - r.x, p.y - r.y); if (d < bd) { bd = d; best = r; } }
+  if (best) {
+    const power = p.inv['hache'] > 0 ? 2 : 1;
+    best.hp -= power;
+    particles.push(...burst(best.x, best.y, 5, '#cdebb0'));
+    if (best.hp <= 0) {
+      const n = Math.floor(R(best.amt[0], best.amt[1] + 1));
+      for (let i = 0; i < n; i++) drops.push({ id: getNetId(), x: best.x + R(-10, 10), y: best.y + R(-10, 10), it: best.gives, bob: R(0, 6) });
+      resources.splice(resources.indexOf(best), 1);
+    }
+  }
+}
+
+function processPlayerPlace(p, item, tx, ty) {
+  if (tx < 1 || ty < 1 || tx >= MW - 1 || ty >= MH - 1) return;
+  if (solidTile(map[ty * MW + tx])) return;
+  if (structGrid[skey(tx, ty)]) return;
+  const cxw = tx * TS + TS / 2, cyw = ty * TS + TS / 2;
+  if (Math.hypot(cxw - p.x, cyw - p.y) < p.r + 14 && item === 'mur') return;
+  if (trees.some(t => Math.hypot(t.x - cxw, t.y - cyw) < 30)) return;
+
+  const s = { id: getNetId(), type: item, tx, ty, x: cxw, y: cyw, hp: item === 'mur' ? 60 : 80, maxhp: item === 'mur' ? 60 : 80 };
+  if (item === 'coffre') s.inv = {};
+  placed.push(s); structGrid[skey(tx, ty)] = s;
+  
+  if (p.inv[item] > 0) p.inv[item]--;
+}
+
+function processChestTransfer(p, data) {
+  const s = placed.find(x => x.id === data.chestId);
+  if (!s || s.type !== 'coffre') return;
+  const item = data.item;
+  if (data.direction === 'toChest') {
+    const count = p.inv[item] || 0;
+    if (count > 0) {
+      s.inv[item] = (s.inv[item] || 0) + count;
+    }
+  } else {
+    const count = s.inv[item] || 0;
+    if (count > 0) {
+      delete s.inv[item];
+    }
+  }
+}
+
+function drawRemotePlayer(rp, x, y) {
+  const t = performance.now() / 100;
+  const bob = Math.sin(rp.walkT || 0) * 1.5;
+  cx.save(); cx.translate(x, y + bob);
+  if (rp.iFrames > 0) cx.globalAlpha = 0.5 + Math.sin(performance.now() / 40) * 0.3;
+  
+  cx.fillStyle = 'rgba(0,0,0,.3)'; cx.beginPath(); cx.ellipse(0, 12 - bob, 10, 4, 0, 0, 7); cx.fill();
+  
+  if (rp.armor) { cx.fillStyle = '#5e4630'; cx.beginPath(); cx.ellipse(0, 4, 9, 11, 0, 0, 7); cx.fill(); }
+  
+  cx.fillStyle = rp.peerId === 'host' ? '#b46ee0' : '#3fa86e';
+  cx.beginPath(); cx.ellipse(0, 3, 7, 9, 0, 0, 7); cx.fill();
+  
+  cx.fillStyle = '#e8b88f'; cx.beginPath(); cx.arc(0, -8, 6, 0, 7); cx.fill();
+  
+  cx.fillStyle = '#d8453c'; cx.beginPath(); cx.arc(0, -9, 6, Math.PI, 0); cx.fill(); cx.fillRect(-6, -10, 12, 2.5);
+  
+  const hasAxe = rp.inv && rp.inv.hache;
+  const hasSword = rp.inv && rp.inv.epee;
+  const hasLance = rp.inv && rp.inv.lance;
+  const wIc = hasSword ? '⚔️' : hasLance ? '🗡️' : hasAxe ? '🪓' : null;
+  if (wIc) {
+    const a = rp.facing + (rp.swing > 0 ? Math.sin(rp.swing * 30) * 0.9 : 0);
+    cx.save(); cx.rotate(a); cx.font = '15px serif'; cx.textAlign = 'center'; cx.fillText(wIc, 16, 4); cx.restore();
+  }
+  
+  if (rp.torchOn) { cx.font = '13px serif'; cx.fillText('🔥', -13, -2 + Math.sin(t) * 1); }
+  
+  cx.fillStyle = 'white'; cx.font = 'bold 11px sans-serif'; cx.textAlign = 'center';
+  cx.strokeStyle = 'black'; cx.lineWidth = 3;
+  cx.strokeText(rp.nickname || 'Joueur', 0, -22);
+  cx.fillText(rp.nickname || 'Joueur', 0, -22);
+  
+  cx.restore();
+}
+
+function broadcastSync() {
+  if (netMode !== 'host' || connections.length === 0) return;
+  const syncPacket = {
+    type: 'sync',
+    players: {
+      host: {
+        peerId: 'host',
+        x: player.x,
+        y: player.y,
+        facing: player.facing,
+        hp: player.hp,
+        food: player.food,
+        water: player.water,
+        swing: player.swing,
+        nickname: myNickname,
+        armor: has('armure'),
+        torchOn: player.torchOn
+      },
+      ...remotePlayers
+    },
+    enemies: enemies.map(e => ({
+      id: e.id,
+      type: e.type,
+      x: e.x,
+      y: e.y,
+      hp: e.hp,
+      maxhp: e.maxhp,
+      ang: e.ang,
+      hitT: e.hitT
+    })),
+    resources: resources.map(r => ({
+      id: r.id,
+      hp: r.hp,
+      type: r.type,
+      x: r.x,
+      y: r.y,
+      maxhp: r.maxhp,
+      gives: r.gives,
+      amt: r.amt,
+      n: r.n,
+      wob: r.wob
+    })),
+    trees: trees.map(t => ({
+      id: t.id,
+      hp: t.hp,
+      shake: t.shake,
+      x: t.x,
+      y: t.y,
+      r: t.r,
+      size: t.size,
+      swamp: t.swamp,
+      sway: t.sway
+    })),
+    placed: placed.map(s => ({
+      id: s.id,
+      type: s.type,
+      tx: s.tx,
+      ty: s.ty,
+      x: s.x,
+      y: s.y,
+      hp: s.hp,
+      maxhp: s.maxhp,
+      inv: s.inv
+    })),
+    fires: fires.map(f => ({
+      id: f.id,
+      x: f.x,
+      y: f.y,
+      t: f.t
+    })),
+    drops: drops.map(d => ({
+      id: d.id,
+      x: d.x,
+      y: d.y,
+      it: d.it,
+      bob: d.bob
+    })),
+    particles: particles.map(p => ({
+      x: p.x,
+      y: p.y,
+      vx: p.vx,
+      vy: p.vy,
+      t: p.t,
+      col: p.col
+    })),
+    floaties: floaties.map(f => ({
+      x: f.x,
+      y: f.y,
+      txt: f.txt,
+      col: f.col,
+      t: f.t
+    })),
+    timeOfDay: timeOfDay,
+    day: st.day,
+    questIdx: questIdx
+  };
+
+  for (const c of connections) {
+    if (c.open) c.send(syncPacket);
+  }
+}
+
 updateHotbar();
 </script>
 </body>
