@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MICRO-JARDIN — Aventure de survie</title>
-<script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <style>
   :root{
     --moss:#1d3a1d; --moss-deep:#0e2410; --amber:#f2b441; --amber-dark:#c98a1b;
@@ -1533,9 +1533,35 @@ function hostGame() {
   
   document.getElementById('connectionStatus').textContent = 'Création du serveur PeerJS...';
   
-  peer = new Peer(roomCodeAttempt);
+  if (typeof Peer === 'undefined') {
+    document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
+    return;
+  }
+
+  // Timeout de connexion
+  let connectionTimeout = setTimeout(() => {
+    if (peer && !peer.open) {
+      document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
+      peer.destroy();
+      peer = null;
+    }
+  }, 10000);
+
+  try {
+    peer = new Peer(roomCodeAttempt, {
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
+      debug: 3
+    });
+  } catch (e) {
+    clearTimeout(connectionTimeout);
+    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS: " + e.message;
+    return;
+  }
   
   peer.on('open', (id) => {
+    clearTimeout(connectionTimeout);
     roomCode = id;
     document.getElementById('connectionStatus').textContent = 'Partie créée ! Code : ' + id;
     document.getElementById('roomCodeDisplay').style.display = 'block';
@@ -1579,8 +1605,13 @@ function hostGame() {
   });
   
   peer.on('error', (err) => {
+    clearTimeout(connectionTimeout);
     console.error(err);
-    document.getElementById('connectionStatus').textContent = 'Erreur lors de la création : ' + err.type;
+    let msgStr = 'Erreur lors de la création : ' + err.type;
+    if (err.type === 'unavailable-id') {
+      msgStr = "Le code de partie est déjà utilisé. Veuillez réessayer.";
+    }
+    document.getElementById('connectionStatus').textContent = msgStr;
   });
 }
 
@@ -1597,9 +1628,35 @@ function joinGame() {
   netMode = 'client';
   document.getElementById('connectionStatus').textContent = 'Connexion à PeerJS...';
   
-  peer = new Peer();
+  if (typeof Peer === 'undefined') {
+    document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
+    return;
+  }
+
+  // Timeout de connexion
+  let connectionTimeout = setTimeout(() => {
+    if (peer && !peer.open) {
+      document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
+      peer.destroy();
+      peer = null;
+    }
+  }, 10000);
+
+  try {
+    peer = new Peer({
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
+      debug: 3
+    });
+  } catch (e) {
+    clearTimeout(connectionTimeout);
+    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS: " + e.message;
+    return;
+  }
   
   peer.on('open', (id) => {
+    clearTimeout(connectionTimeout);
     document.getElementById('connectionStatus').textContent = 'Connexion à la partie ' + targetCode + '...';
     conn = peer.connect(targetCode);
     
@@ -1618,8 +1675,15 @@ function joinGame() {
   });
   
   peer.on('error', (err) => {
+    clearTimeout(connectionTimeout);
     console.error(err);
-    document.getElementById('connectionStatus').textContent = 'Erreur de connexion : ' + err.type;
+    let msgStr = 'Erreur de connexion : ' + err.type;
+    if (err.type === 'peer-unavailable') {
+      msgStr = "Code de partie introuvable ou l'hôte s'est déconnecté.";
+    } else if (err.type === 'network') {
+      msgStr = "Problème réseau lors de la connexion.";
+    }
+    document.getElementById('connectionStatus').textContent = msgStr;
   });
 }
 
