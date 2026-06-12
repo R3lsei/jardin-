@@ -515,7 +515,7 @@ addEventListener('keydown',e=>{
 });
 addEventListener('keyup',e=>keys[e.code]=false);
 window.addEventListener('blur',()=>keys={}); // Empêcher le perso de bouger tout seul
-const mouse={x:0,y:0,down:false};
+
 cv.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
 cv.addEventListener('mousedown',()=>{mouse.down=true;tryAttack();});
 addEventListener('mouseup',()=>mouse.down=false);
