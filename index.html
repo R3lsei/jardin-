@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v16 — Aventure de survie</title>
+<title>MICRO-JARDIN v17 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -795,6 +795,20 @@ function tryAttack(){
       }
     }
   }
+  // Hit remote players
+  for (const pid in remotePlayers) {
+    const rp = remotePlayers[pid];
+    const d = dist(player, rp);
+    if (d < range + 11) {
+      const ang=Math.atan2(rp.y-player.y,rp.x-player.x);
+      let diff=Math.abs(((ang-player.facing)+Math.PI*3)%(Math.PI*2)-Math.PI);
+      if(diff<1.4||d<11+16){
+        hit=true;
+        const c = connections.find(c => c.peer === pid);
+        if (c) c.send({ type: 'hit', dmg: dmg, ang: ang });
+      }
+    }
+  }
   // pas d'ennemi touché → on peut casser une construction visée
   if(!hit){
     for(const s of placed){
@@ -988,7 +1002,13 @@ function update(dt){
   /* ramassage */
   for(let i=drops.length-1;i>=0;i--){
     const d=drops[i];d.bob+=dt*4;
-    if(dist(player,d)<26){give(d.it);floaty(d.x,d.y-10,'+1 '+ITEMS[d.it].ic);drops.splice(i,1);beep(620,.06,'sine',.05);}
+    if(dist(player,d)<26){
+      give(d.it);floaty(d.x,d.y-10,'+1 '+ITEMS[d.it].ic);
+      if (netMode === 'client') {
+        conn.send({ type: 'action', action: 'pickupDrop', dropId: d.id });
+      }
+      drops.splice(i,1);beep(620,.06,'sine',.05);
+    }
   }
 
   /* ennemis */
@@ -1856,6 +1876,9 @@ function handleHostMessage(clientPeerId, data) {
     } else if (data.action === 'chestTransfer') {
       const rp = remotePlayers[clientPeerId];
       if (rp) processChestTransfer(rp, data);
+    } else if (data.action === 'pickupDrop') {
+      const idx = drops.findIndex(d => d.id === data.dropId);
+      if (idx !== -1) drops.splice(idx, 1);
     }
   }
 }
@@ -1883,6 +1906,14 @@ function handleClientMessage(data) {
     running = true;
     msg('🎮 Connecté ! Aventure multijoueur commencée.', 'good');
     requestAnimationFrame(loop);
+  } else if (data.type === 'hit') {
+    if(player.iFrames<=0){
+      const actDmg=Math.round(data.dmg*armorMul());
+      player.hp-=actDmg;player.iFrames=0.4;
+      floaty(player.x,player.y-22,'-'+actDmg,'#ff5a4d');
+      dmgFlash();beep(100,.15,'sawtooth',.1);
+      moveEntity(player,Math.cos(data.ang)*16,Math.sin(data.ang)*16);
+    }
   } else if (data.type === 'sync') {
     remotePlayers = data.players;
     enemies = data.enemies;
@@ -1946,6 +1977,37 @@ function processPlayerAttack(p, dmg, facing) {
       }
     }
   }
+  
+  // Hit other players
+  const hostP = { x: player.x, y: player.y, r: 11 };
+  const allTargets = [ { p: hostP, isHost: true } ];
+  for (const pid in remotePlayers) {
+    if (pid !== p.peerId) allTargets.push({ p: remotePlayers[pid], isHost: false, pid: pid });
+  }
+  for (const t of allTargets) {
+    const target = t.p;
+    const d = dist(p, target);
+    if (d < range + 11) {
+      const ang = Math.atan2(target.y - p.y, target.x - p.x);
+      let diff = Math.abs(((ang - facing) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+      if (diff < 1.4 || d < 11 + 16) {
+        hit = true;
+        if (t.isHost) {
+          if (player.iFrames <= 0) {
+            const actDmg = Math.round(dmg * armorMul());
+            player.hp -= actDmg; player.iFrames = 0.4;
+            floaties.push({ x: player.x, y: player.y - 22, txt: '-' + actDmg, col: '#ff5a4d', t: 1 });
+            dmgFlash(); beep(100, .15, 'sawtooth', .1);
+            moveEntity(player, Math.cos(ang) * 16, Math.sin(ang) * 16);
+          }
+        } else {
+          const c = connections.find(c => c.peer === t.pid);
+          if (c) c.send({ type: 'hit', dmg: dmg, ang: ang });
+        }
+      }
+    }
+  }
+
   if (!hit) {
     for (const s of placed) {
       if (Math.hypot(s.x - p.x, s.y - p.y) < range + 18) {
