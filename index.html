@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v18 — Aventure de survie</title>
+<title>MICRO-JARDIN v19 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -116,9 +116,10 @@
 
 <!-- HUD -->
 <div class="hud" id="stats">
-  <div class="bar"><div class="fill" id="hpFill"></div><div class="lab"><span>❤ VIE</span><span id="hpTxt"></span></div></div>
-  <div class="bar"><div class="fill" id="foodFill"></div><div class="lab"><span>🍖 FAIM</span><span id="foodTxt"></span></div></div>
-  <div class="bar"><div class="fill" id="waterFill"></div><div class="lab"><span>💧 SOIF</span><span id="waterTxt"></span></div></div>
+  <div class="barWrap" title="Vie"><div id="hpFill" class="barFill" style="width:100%"></div><div id="hpTxt" class="barTxt">100</div></div>
+  <div class="barWrap" title="Faim"><div id="foodFill" class="barFill" style="width:100%"></div><div id="foodTxt" class="barTxt">100</div></div>
+  <div class="barWrap" title="Soif"><div id="waterFill" class="barFill" style="width:100%"></div><div id="waterTxt" class="barTxt">100</div></div>
+  <div class="barWrap" title="Endurance"><div id="staminaFill" class="barFill" style="width:100%"></div><div id="staminaTxt" class="barTxt">100</div></div>
 </div>
 <div class="hud" id="clock">
   <div id="roomCodeDisplay" style="display:none; background:#b46ee0; border:1px solid #894dae; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:1px; margin-bottom:6px; cursor:pointer;" onclick="navigator.clipboard.writeText(this.dataset.code); msg('📋 Code copié !','good');">🔑 CODE: <span id="roomCodeVal">-</span></div>
@@ -254,7 +255,7 @@ function noise(x,y){
 }
 
 /* ---------- MONDE ---------- */
-const TS=36, MW=130, MH=130;
+const TS=36, MW=180, MH=180;
 const WPX=MW*TS, HPX=MH*TS;
 // Tuiles : 0 herbe prairie, 1 herbe haute, 2 terre, 3 eau, 4 rocher, 5 sable, 6 herbe forêt, 7 boue marais
 const map = new Uint8Array(MW*MH);
@@ -279,7 +280,7 @@ function genWorld(){
     if(b===0)t = d<0.12?1 : d<0.17?2 : 0;          // prairie
     else if(b===1)t = d<0.2?1 : 6;                  // forêt : herbe sombre
     else if(b===2)t = d<0.35?7 : d<0.42?1 : 0;      // marais : boue
-    else t = d<0.55?2 : d<0.8?5 : 0;                // clairière sèche
+    else t = d<0.55?8 : d<0.75?5 : 2;                // clairière sèche
     map[y*MW+x]=t;
   }
   // lacs
@@ -339,11 +340,15 @@ const ITEMS = {
   armure:  {ic:'🥋', n:'Armure de carapace', armor:0.45},
   torche:  {ic:'🔥', n:'Torche de sève', torch:true},
   gourde:  {ic:'🫙', n:'Gourde de gland', drink:{water:60}},
+  potion_energie:{ic:'🧪', n:'Potion d\'énergie', stamina:50},
+  fibre_seche:{ic:'🌾', n:'Fibre sèche'},
+  bottes_hate:{ic:'👢', n:'Bottes légères'},
   feu:     {ic:'🏕️', n:'Feu de camp', place:'feu'},
   etabli:  {ic:'🛠️', n:'Établi', place:'etabli'},
   mur:     {ic:'🧱', n:'Mur de bois', place:'mur'},
   coffre:  {ic:'📦', n:'Coffre', place:'coffre'},
   lit:     {ic:'🛏️', n:'Lit de mousse', place:'lit'},
+  tente:   {ic:'⛺', n:'Tente', place:'tente'},
   cristal: {ic:'💎', n:'Cristal arachnide', key:true},
 };
 const RECIPES = [
@@ -354,11 +359,14 @@ const RECIPES = [
   {id:'torche', cost:{brindille:1,seve:1,fibre:1},    desc:'Éclaire la nuit, effraie un peu les araignées.'},
   {id:'gourde', cost:{fibre:4,seve:1},                desc:'Grande réserve d\'eau (+60 soif). Consommable.'},
   {id:'bandage',cost:{fibre:2,champi:1},              desc:'Soigne 35 PV. Consommable.'},
+  {id:'potion_energie', cost:{seve:1,rosee:1,fibre_seche:1}, desc:'Restaure 50 d\'endurance instantanément.'},
+  {id:'bottes_hate', cost:{carapace:2,fibre_seche:3}, desc:'Bottes augmentant passivement la vitesse de 20%.'},
   {id:'feu',    cost:{brindille:5,caillou:3},         desc:'À placer : lumière, soin lent, point de réapparition.'},
   {id:'etabli', cost:{bois:4,caillou:2,fibre:2},      desc:'À placer. Débloque les constructions (murs, coffre, lit) à proximité.'},
   {id:'mur',    cost:{bois:2},  gives:4, near:true,   desc:'Lot de 4 murs. Placer avec la souris. Bloque tout le monde. Cassable.'},
   {id:'coffre', cost:{bois:5,fibre:2}, near:true,     desc:'À placer. Stocke tes ressources (E pour ouvrir).'},
   {id:'lit',    cost:{bois:3,fibre:5,seve:1}, near:true, desc:'À placer. Point de réapparition, dodo la nuit (E), téléportation (T).'},
+  {id:'tente',  cost:{bois:3,fibre_seche:5},          desc:'À placer. Point de réapparition portable comme un lit, sans établi.'},
 ];
 
 /* ---------- ENTITÉS ---------- */
@@ -375,8 +383,9 @@ function spawnResources(){
     {t:'champi',  count:85,  gives:'champi',  amt:[1,2], hp:1, tile:[1,6,7]},
     {t:'rosee',   count:100, gives:'rosee',   amt:[1,1], hp:1, tile:[0,1,6,7]},
     {t:'seve',    count:60,  gives:'seve',    amt:[1,2], hp:2, tile:[0,1,2,6]},
+    {t:'herbe_seche', count:100, gives:'fibre_seche', amt:[1,2], hp:1, tile:[8]},
   ];
-  const names={plante:'Pousse fibreuse',brindille:'Brindille',caillou:'Quartz',champi:'Champignon',rosee:'Rosée',seve:'Bulle de sève'};
+  const names={plante:'Pousse fibreuse',brindille:'Brindille',caillou:'Quartz',champi:'Champignon',rosee:'Rosée',seve:'Bulle de sève',herbe_seche:'Herbe sèche'};
   for(const d of defs){
     let placedN=0,guard=0;
     while(placedN<d.count&&guard++<8000){
@@ -444,7 +453,7 @@ function spawnSomewhere(type,biome){
 /* ---------- JOUEUR ---------- */
 const player={
   x:SPAWN.x,y:SPAWN.y,r:11,
-  hp:100,maxhp:100,food:100,water:100,
+  hp:100,maxhp:100,food:100,water:100,stamina:100,maxstamina:100,
   spd:120, facing:0, atkCd:0, iFrames:0,
   inv:{}, kills:0, harvested:0, crafted:0, built:0,
   spawnPoint:{x:SPAWN.x,y:SPAWN.y},
@@ -456,7 +465,7 @@ function take(it,n=1){ player.inv[it]=Math.max(0,(player.inv[it]||0)-n); if(!pla
 function weaponDmg(){ let d=6; if(has('hache'))d=Math.max(d,14); if(has('lance'))d=Math.max(d,14); if(has('epee'))d=Math.max(d,24); return d; }
 function armorMul(){ return has('armure')?0.55:1; }
 function nearEtabli(){ return placed.some(s=>s.type==='etabli'&&dist(player,s)<170); }
-function getBed(){ return placed.find(s=>s.type==='lit'); }
+function getBed(){ return placed.find(s=>s.type==='lit'||s.type==='tente'); }
 
 /* ---------- QUÊTES ---------- */
 const QUESTS=[
@@ -531,7 +540,7 @@ function msg(txt,cls=''){
 function floaty(x,y,txt,col='#f2b441'){ floaties.push({x,y,txt,col,t:1}); }
 
 /* hotbar */
-const HOTKEYS=['champi','rosee','viande','bandage','gourde','feu','etabli','mur','coffre','lit'];
+const HOTKEYS=['champi','rosee','viande','bandage','potion_energie','gourde','feu','etabli','mur','coffre','lit','tente'];
 function updateHotbar(){
   const hb=document.getElementById('hotbar');hb.innerHTML='';
   HOTKEYS.forEach((it,i)=>{
@@ -552,6 +561,7 @@ function useHotbar(i){
   if(def.eat){player.food=clamp(player.food+def.eat.food,0,100);take(it);st.ate=true;floaty(player.x,player.y-20,'+'+def.eat.food+' 🍖');beep(520,.1,'sine');}
   else if(def.drink){player.water=clamp(player.water+def.drink.water,0,100);take(it);st.drank=true;floaty(player.x,player.y-20,'+'+def.drink.water+' 💧','#7fc4e8');beep(660,.1,'sine');}
   else if(def.heal){player.hp=clamp(player.hp+def.heal,0,player.maxhp);take(it);floaty(player.x,player.y-20,'+'+def.heal+' ❤','#e0584e');beep(700,.12,'sine');}
+  else if(def.stamina){player.stamina=clamp(player.stamina+def.stamina,0,player.maxstamina);take(it);floaty(player.x,player.y-20,'+'+def.stamina+' ⚡','#ffb703');beep(660,.1,'triangle');}
   else if(def.place)tryPlace(it);
 }
 
@@ -913,12 +923,13 @@ function update(dt){
 
   if (netMode === 'client') {
     st.timeAlive += dt;
-    player.food = clamp(player.food - dt * 0.55, 0, 100);
+    player.food = clamp(player.food - dt * 0.30, 0, 100);
     player.water = clamp(player.water - dt * 0.75, 0, 100);
     if (player.food <= 0 || player.water <= 0) {
       player.hp -= dt * 4;
       if (Math.random() < dt) msg(player.food <= 0 ? '🍖 Tu meurs de faim !' : '💧 Tu meurs de soif !', 'bad');
     }
+    else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
     
     // Movement
     let dx = 0, dy = 0;
@@ -926,10 +937,19 @@ function update(dt){
     if (keys.KeyS || keys.ArrowDown) dy += 1;
     if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) dx -= 1;
     if (keys.KeyD || keys.ArrowRight) dx += 1;
-    const sprint = (keys.ShiftLeft || keys.ShiftRight) && player.food > 5;
+    
+    const sprint = (keys.ShiftLeft || keys.ShiftRight) && player.stamina > 2;
     const onMud = map[(player.y / TS | 0) * MW + (player.x / TS | 0)] === 7;
-    let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1);
-    if (sprint && (dx || dy)) player.food = clamp(player.food - dt * 2.4, 0, 100);
+    const hasBoots = player.inv && player.inv['bottes_hate'];
+    
+    let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1) * (hasBoots ? 1.2 : 1);
+    
+    if (sprint && (dx || dy)) {
+      player.stamina = Math.max(0, player.stamina - dt * 25);
+    } else {
+      player.stamina = Math.min(player.maxstamina, player.stamina + dt * 15);
+    }
+    
     if (dx && dy) { dx *= 0.707; dy *= 0.707; }
     if (dx || dy) {
       moveEntity(player, dx * spd * dt, dy * spd * dt);
@@ -945,7 +965,7 @@ function update(dt){
     for (const f of floaties) { f.t -= dt; f.y -= 28 * dt; }
     for (const t of trees) t.shake = Math.max(0, (t.shake || 0) - dt);
     
-    setBar('hp', player.hp, player.maxhp); setBar('food', player.food, 100); setBar('water', player.water, 100);
+    setBar('hp', player.hp, player.maxhp); setBar('food', player.food, 100); setBar('water', player.water, 100); setBar('stamina', player.stamina, player.maxstamina);
     document.getElementById('dayLabel').textContent = (isNight() ? '🌙 NUIT ' : '☀ JOUR ') + st.day;
     const pb = biomeMap[(player.y / TS | 0) * MW + (player.x / TS | 0)];
     document.getElementById('biomeLabel').textContent = BIOME_NAMES[pb] || '';
@@ -982,7 +1002,7 @@ function update(dt){
   document.getElementById('biomeLabel').textContent=BIOME_NAMES[pb]||'';
 
   /* survie */
-  player.food=clamp(player.food-dt*0.55,0,100);
+  player.food=clamp(player.food-dt*0.30,0,100);
   player.water=clamp(player.water-dt*0.75,0,100);
   if(player.food<=0||player.water<=0){player.hp-=dt*4;if(Math.random()<dt)msg(player.food<=0?'🍖 Tu meurs de faim !':'💧 Tu meurs de soif !','bad');}
   else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
@@ -995,11 +1015,16 @@ function update(dt){
   if(keys.KeyS||keys.ArrowDown)dy+=1;
   if(keys.KeyA||keys.KeyQ||keys.ArrowLeft)dx-=1;
   if(keys.KeyD||keys.ArrowRight)dx+=1;
-  const sprint=(keys.ShiftLeft||keys.ShiftRight)&&player.food>5;
+  
+  const sprint=(keys.ShiftLeft||keys.ShiftRight)&&player.stamina>2;
   // marais : boue ralentit
   const onMud=map[(player.y/TS|0)*MW+(player.x/TS|0)]===7;
-  let spd=player.spd*(sprint?1.55:1)*(onMud?0.6:1);
-  if(sprint&&(dx||dy))player.food=clamp(player.food-dt*2.4,0,100);
+  const hasBoots = player.inv && player.inv['bottes_hate'];
+  let spd=player.spd*(sprint?1.55:1)*(onMud?0.6:1)*(hasBoots?1.2:1);
+  
+  if(sprint&&(dx||dy)) player.stamina = Math.max(0, player.stamina - dt * 25);
+  else player.stamina = Math.min(player.maxstamina, player.stamina + dt * 15);
+  
   if(dx&&dy){dx*=0.707;dy*=0.707;}
   if(dx||dy){
     moveEntity(player,dx*spd*dt,dy*spd*dt);
@@ -1116,14 +1141,21 @@ function update(dt){
     document.getElementById('deathScreen').style.display='flex';
   }
 
-  setBar('hp',player.hp,player.maxhp);setBar('food',player.food,100);setBar('water',player.water,100);
+  setBar('hp',player.hp,player.maxhp);setBar('food',player.food,100);setBar('water',player.water,100);setBar('stamina',player.stamina,player.maxstamina);
   const q2=QUESTS[questIdx];
   if(q2){document.getElementById('questTitle').textContent=q2.t;document.getElementById('questDesc').textContent=q2.d;document.getElementById('questProg').textContent=q2.prog();}
   else{document.getElementById('questTitle').textContent='Libre comme l\'air';document.getElementById('questDesc').textContent='Explore le micro-jardin.';document.getElementById('questProg').textContent='';}
 
-  if (netMode === 'host' && performance.now() - (player.lastSync || 0) > 100) {
-    player.lastSync = performance.now();
-    broadcastSync();
+  if (netMode === 'host') {
+    const pn = performance.now();
+    if (pn - (player.lastSyncFast || 0) > 50) {
+      player.lastSyncFast = pn;
+      broadcastSyncFast();
+    }
+    if (pn - (player.lastSyncSlow || 0) > 1000) {
+      player.lastSyncSlow = pn;
+      broadcastSyncSlow();
+    }
   }
 }
 function setBar(id,v,m){document.getElementById(id+'Fill').style.width=clamp(v/m*100,0,100)+'%';document.getElementById(id+'Txt').textContent=Math.ceil(v);}
@@ -1174,10 +1206,11 @@ function render(){
       case 5:cx.fillStyle=`hsl(${44+h},42%,${48+h}%)`;break;
       case 6:cx.fillStyle=`hsl(${122+h},44%,${17+h}%)`;break;   // forêt sombre
       case 7:cx.fillStyle=`hsl(${78+h},28%,${19+h}%)`;break;    // boue marais
+      case 8:cx.fillStyle=`hsl(${44+h},35%,${38+h}%)`;break;    // herbe sèche
     }
     cx.fillRect(px,py,TS+1,TS+1);
-    if(t===0||t===1||t===6){
-      cx.strokeStyle=t===6?'rgba(30,70,30,.7)':t===1?'rgba(40,90,35,.8)':'rgba(60,120,50,.5)';
+    if(t===0||t===1||t===6||t===8){
+      cx.strokeStyle=t===6?'rgba(30,70,30,.7)':t===1?'rgba(40,90,35,.8)':t===8?'rgba(120,90,40,.6)':'rgba(60,120,50,.5)';
       cx.lineWidth=1.5;
       const g=grassPattern[(tx*3+ty*7)%grassPattern.length];
       cx.beginPath();
@@ -1924,7 +1957,7 @@ function handleClientMessage(data) {
       dmgFlash();beep(100,.15,'sawtooth',.1);
       moveEntity(player,Math.cos(data.ang)*16,Math.sin(data.ang)*16);
     }
-  } else if (data.type === 'sync') {
+  } else if (data.type === 'syncFast') {
     for (const pid in data.players) {
       if (peer && pid === peer.id) continue;
       const sp = data.players[pid];
@@ -1933,7 +1966,7 @@ function handleClientMessage(data) {
       } else {
         const rp = remotePlayers[pid];
         rp.targetX = sp.x; rp.targetY = sp.y;
-        rp.facing = sp.facing; rp.hp = sp.hp; rp.food = sp.food; rp.water = sp.water;
+        rp.facing = sp.facing; rp.hp = sp.hp; rp.food = sp.food; rp.water = sp.water; rp.stamina = sp.stamina;
         rp.swing = sp.swing; rp.armor = sp.armor; rp.torchOn = sp.torchOn;
         if (sp.nickname) rp.nickname = sp.nickname;
       }
@@ -1950,25 +1983,26 @@ function handleClientMessage(data) {
     }
     enemies = enemies.filter(e => data.enemies.some(se => se.id === e.id));
 
+    if (data.particles) particles = data.particles;
+    if (data.floaties) floaties = data.floaties;
+    if (data.timeOfDay !== undefined) timeOfDay = data.timeOfDay;
+    if (data.day !== undefined) st.day = data.day;
+    if (data.questIdx !== undefined) questIdx = data.questIdx;
+    
+    if (peer && data.players[peer.id]) {
+      player.hp = data.players[peer.id].hp;
+      if (data.players[peer.id].stamina !== undefined) player.stamina = data.players[peer.id].stamina;
+    }
+  } else if (data.type === 'syncSlow') {
     resources = data.resources;
     trees = data.trees;
     placed = data.placed;
     fires = data.fires;
     drops = data.drops;
-    particles = data.particles;
-    floaties = data.floaties;
-    timeOfDay = data.timeOfDay;
-    st.day = data.day;
-    questIdx = data.questIdx;
     
     // Rebuild structures grid
     for (const key in structGrid) delete structGrid[key];
     for (const s of placed) structGrid[skey(s.tx, s.ty)] = s;
-    
-    // Update local stats from server sync
-    if (peer && data.players[peer.id]) {
-      player.hp = data.players[peer.id].hp;
-    }
   }
 }
 
@@ -2170,106 +2204,47 @@ function drawRemotePlayer(rp, x, y) {
   cx.restore();
 }
 
-function broadcastSync() {
+function broadcastSyncFast() {
   if (netMode !== 'host' || connections.length === 0) return;
   const syncPacket = {
-    type: 'sync',
+    type: 'syncFast',
     players: {
       host: {
-        peerId: 'host',
-        x: player.x,
-        y: player.y,
-        facing: player.facing,
-        hp: player.hp,
-        food: player.food,
-        water: player.water,
-        swing: player.swing,
-        nickname: myNickname,
-        armor: has('armure'),
-        torchOn: player.torchOn
+        peerId: 'host', x: player.x, y: player.y, facing: player.facing,
+        hp: player.hp, food: player.food, water: player.water, stamina: player.stamina,
+        swing: player.swing, nickname: myNickname, armor: has('armure'), torchOn: player.torchOn
       },
       ...remotePlayers
     },
     enemies: enemies.map(e => ({
-      id: e.id,
-      type: e.type,
-      x: e.x,
-      y: e.y,
-      hp: e.hp,
-      maxhp: e.maxhp,
-      ang: e.ang,
-      hitT: e.hitT
+      id: e.id, type: e.type, x: e.x, y: e.y, hp: e.hp, maxhp: e.maxhp, ang: e.ang, hitT: e.hitT
     })),
-    resources: resources.map(r => ({
-      id: r.id,
-      hp: r.hp,
-      type: r.type,
-      x: r.x,
-      y: r.y,
-      maxhp: r.maxhp,
-      gives: r.gives,
-      amt: r.amt,
-      n: r.n,
-      wob: r.wob
-    })),
-    trees: trees.map(t => ({
-      id: t.id,
-      hp: t.hp,
-      shake: t.shake,
-      x: t.x,
-      y: t.y,
-      r: t.r,
-      size: t.size,
-      swamp: t.swamp,
-      sway: t.sway
-    })),
-    placed: placed.map(s => ({
-      id: s.id,
-      type: s.type,
-      tx: s.tx,
-      ty: s.ty,
-      x: s.x,
-      y: s.y,
-      hp: s.hp,
-      maxhp: s.maxhp,
-      inv: s.inv
-    })),
-    fires: fires.map(f => ({
-      id: f.id,
-      x: f.x,
-      y: f.y,
-      t: f.t
-    })),
-    drops: drops.map(d => ({
-      id: d.id,
-      x: d.x,
-      y: d.y,
-      it: d.it,
-      bob: d.bob
-    })),
-    particles: particles.map(p => ({
-      x: p.x,
-      y: p.y,
-      vx: p.vx,
-      vy: p.vy,
-      t: p.t,
-      col: p.col
-    })),
-    floaties: floaties.map(f => ({
-      x: f.x,
-      y: f.y,
-      txt: f.txt,
-      col: f.col,
-      t: f.t
-    })),
+    particles: particles,
+    floaties: floaties,
     timeOfDay: timeOfDay,
     day: st.day,
     questIdx: questIdx
   };
+  for (const c of connections) if (c.open) c.send(syncPacket);
+}
 
-  for (const c of connections) {
-    if (c.open) c.send(syncPacket);
-  }
+function broadcastSyncSlow() {
+  if (netMode !== 'host' || connections.length === 0) return;
+  const syncPacket = {
+    type: 'syncSlow',
+    resources: resources.map(r => ({
+      id: r.id, hp: r.hp, type: r.type, x: r.x, y: r.y, maxhp: r.maxhp, gives: r.gives, amt: r.amt, n: r.n, wob: r.wob
+    })),
+    trees: trees.map(t => ({
+      id: t.id, hp: t.hp, shake: t.shake, x: t.x, y: t.y, r: t.r, size: t.size, swamp: t.swamp, sway: t.sway
+    })),
+    placed: placed.map(s => ({
+      id: s.id, type: s.type, tx: s.tx, ty: s.ty, x: s.x, y: s.y, hp: s.hp, maxhp: s.maxhp, inv: s.inv
+    })),
+    fires: fires.map(f => ({ id: f.id, x: f.x, y: f.y, t: f.t })),
+    drops: drops.map(d => ({ id: d.id, x: d.x, y: d.y, it: d.it, bob: d.bob }))
+  };
+  for (const c of connections) if (c.open) c.send(syncPacket);
 }
 
 updateHotbar();
