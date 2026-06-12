@@ -179,7 +179,8 @@
       <button class="bigbtn" style="font-size:12px; padding:12px; width:100%; box-shadow:none; border-radius:8px; background:#5aa8d8; color:#0b253a; text-shadow:none;" onclick="joinGame()">Rejoindre</button>
     </div>
     <input type="text" id="roomCodeInput" placeholder="Code de la partie (ex: m-j-1234)" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center;">
-    <div id="connectionStatus" style="font-size:12px; color:var(--amber); font-weight:bold; height:18px;"></div>
+    <div id="connectionStatus" style="font-size:12px; color:var(--amber); font-weight:bold; min-height:18px; height:auto; text-align:center; word-break:break-word; max-width:100%; margin-top:4px;"></div>
+    <div id="connectionErrorLog" style="font-size:10px; color:#ff6b6b; font-family:monospace; margin-top:8px; display:none; background:rgba(0,0,0,0.7); padding:8px; border-radius:6px; width:100%; max-height:120px; overflow-y:auto; word-break:break-all; text-align:left; border:1px solid rgba(255,107,107,0.3); white-space:pre-wrap;"></div>
     <button class="bigbtn" style="font-size:11px; padding:6px 14px; background:#e0584e; color:white; border-radius:6px; box-shadow:none; text-transform:none; font-weight:normal; text-shadow:none;" onclick="hideMultiplayerMenu()">Retour</button>
   </div>
 </div>
@@ -1514,11 +1515,22 @@ function drawMinimapLive(){
 function showMultiplayerMenu(){
   document.getElementById('menuButtons').style.display = 'none';
   document.getElementById('multiplayerMenu').style.display = 'flex';
+  document.getElementById('connectionStatus').textContent = '';
+  const errLog = document.getElementById('connectionErrorLog');
+  if (errLog) {
+    errLog.textContent = '';
+    errLog.style.display = 'none';
+  }
 }
 function hideMultiplayerMenu(){
   document.getElementById('menuButtons').style.display = 'flex';
   document.getElementById('multiplayerMenu').style.display = 'none';
   document.getElementById('connectionStatus').textContent = '';
+  const errLog = document.getElementById('connectionErrorLog');
+  if (errLog) {
+    errLog.textContent = '';
+    errLog.style.display = 'none';
+  }
 }
 
 function generateRoomCode() {
@@ -1532,6 +1544,11 @@ function hostGame() {
   const roomCodeAttempt = generateRoomCode();
   
   document.getElementById('connectionStatus').textContent = 'Création du serveur PeerJS...';
+  const errLog = document.getElementById('connectionErrorLog');
+  if (errLog) {
+    errLog.style.display = 'none';
+    errLog.textContent = '';
+  }
   
   if (typeof Peer === 'undefined') {
     document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
@@ -1542,6 +1559,10 @@ function hostGame() {
   let connectionTimeout = setTimeout(() => {
     if (peer && !peer.open) {
       document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
+      if (errLog) {
+        errLog.style.display = 'block';
+        errLog.textContent = "Détails: Le serveur public PeerJS (0.peerjs.com) n'a pas répondu. Cela se produit si le serveur est surchargé, si votre navigateur bloque les WebSockets sécurisés, ou si vous êtes derrière un pare-feu restrictif.";
+      }
       peer.destroy();
       peer = null;
     }
@@ -1549,14 +1570,16 @@ function hostGame() {
 
   try {
     peer = new Peer(roomCodeAttempt, {
-      host: '0.peerjs.com',
-      port: 443,
-      secure: true,
+      key: 'peerjs',
       debug: 3
     });
   } catch (e) {
     clearTimeout(connectionTimeout);
-    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS: " + e.message;
+    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS";
+    if (errLog) {
+      errLog.style.display = 'block';
+      errLog.textContent = `Exception: ${e.message}\nStack: ${e.stack}`;
+    }
     return;
   }
   
@@ -1612,6 +1635,10 @@ function hostGame() {
       msgStr = "Le code de partie est déjà utilisé. Veuillez réessayer.";
     }
     document.getElementById('connectionStatus').textContent = msgStr;
+    if (errLog) {
+      errLog.style.display = 'block';
+      errLog.textContent = `Erreur PeerJS: ${err.type || 'inconnue'}\nMessage: ${err.message || 'aucun message détaillé'}`;
+    }
   });
 }
 
@@ -1627,6 +1654,11 @@ function joinGame() {
   
   netMode = 'client';
   document.getElementById('connectionStatus').textContent = 'Connexion à PeerJS...';
+  const errLog = document.getElementById('connectionErrorLog');
+  if (errLog) {
+    errLog.style.display = 'none';
+    errLog.textContent = '';
+  }
   
   if (typeof Peer === 'undefined') {
     document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
@@ -1637,6 +1669,10 @@ function joinGame() {
   let connectionTimeout = setTimeout(() => {
     if (peer && !peer.open) {
       document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
+      if (errLog) {
+        errLog.style.display = 'block';
+        errLog.textContent = "Détails: Le serveur public PeerJS (0.peerjs.com) n'a pas répondu. Cela se produit si le serveur est surchargé, si votre navigateur bloque les WebSockets sécurisés, ou si vous êtes derrière un pare-feu restrictif.";
+      }
       peer.destroy();
       peer = null;
     }
@@ -1644,14 +1680,16 @@ function joinGame() {
 
   try {
     peer = new Peer({
-      host: '0.peerjs.com',
-      port: 443,
-      secure: true,
+      key: 'peerjs',
       debug: 3
     });
   } catch (e) {
     clearTimeout(connectionTimeout);
-    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS: " + e.message;
+    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS";
+    if (errLog) {
+      errLog.style.display = 'block';
+      errLog.textContent = `Exception: ${e.message}\nStack: ${e.stack}`;
+    }
     return;
   }
   
@@ -1684,6 +1722,10 @@ function joinGame() {
       msgStr = "Problème réseau lors de la connexion.";
     }
     document.getElementById('connectionStatus').textContent = msgStr;
+    if (errLog) {
+      errLog.style.display = 'block';
+      errLog.textContent = `Erreur PeerJS: ${err.type || 'inconnue'}\nMessage: ${err.message || 'aucun message détaillé'}`;
+    }
   });
 }
 
