@@ -1073,13 +1073,6 @@ function update(dt){
   if (netMode === 'host') {
     broadcastSync();
   }
-}eathScreen').style.display='flex';
-  }
-
-  setBar('hp',player.hp,player.maxhp);setBar('food',player.food,100);setBar('water',player.water,100);
-  const q2=QUESTS[questIdx];
-  if(q2){document.getElementById('questTitle').textContent=q2.t;document.getElementById('questDesc').textContent=q2.d;document.getElementById('questProg').textContent=q2.prog();}
-  else{document.getElementById('questTitle').textContent='Libre comme l\'air';document.getElementById('questDesc').textContent='Explore le micro-jardin.';document.getElementById('questProg').textContent='';}
 }
 function setBar(id,v,m){document.getElementById(id+'Fill').style.width=clamp(v/m*100,0,100)+'%';document.getElementById(id+'Txt').textContent=Math.ceil(v);}
 function dmgFlash(){const f=document.getElementById('dmgFlash');f.style.opacity=1;setTimeout(()=>f.style.opacity=0,160);}
