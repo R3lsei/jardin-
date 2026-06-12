@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v10 — Aventure de survie</title>
+<title>MICRO-JARDIN v11 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1776,15 +1776,27 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
     statusEl.textContent = '🔗 Connexion à la partie ' + targetCode + '...';
-    conn = peer.connect(targetCode);
+    conn = peer.connect(targetCode, { reliable: true });
     
+    const p2pTimeout = setTimeout(() => {
+      statusEl.innerHTML = '❌ Impossible de se connecter à l\'hôte (Firewall/NAT).<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+      try { conn.close(); } catch(e){}
+    }, 10000);
+
     conn.on('open', () => {
+      clearTimeout(p2pTimeout);
       statusEl.textContent = '✅ Connecté ! Chargement du monde...';
     });
     conn.on('data', (data) => { handleClientMessage(data); });
     conn.on('close', () => {
+      clearTimeout(p2pTimeout);
       msg('🔌 Déconnecté de l\'hôte.', 'bad');
       setTimeout(() => location.reload(), 1500);
+    });
+    conn.on('error', (err) => {
+      clearTimeout(p2pTimeout);
+      statusEl.innerHTML = '❌ Erreur de connexion P2P.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+      console.error(err);
     });
   });
   
