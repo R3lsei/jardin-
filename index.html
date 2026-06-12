@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v15 — Aventure de survie</title>
+<title>MICRO-JARDIN v16 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1090,7 +1090,8 @@ function update(dt){
   if(q2){document.getElementById('questTitle').textContent=q2.t;document.getElementById('questDesc').textContent=q2.d;document.getElementById('questProg').textContent=q2.prog();}
   else{document.getElementById('questTitle').textContent='Libre comme l\'air';document.getElementById('questDesc').textContent='Explore le micro-jardin.';document.getElementById('questProg').textContent='';}
 
-  if (netMode === 'host') {
+  if (netMode === 'host' && performance.now() - (player.lastSync || 0) > 100) {
+    player.lastSync = performance.now();
     broadcastSync();
   }
 }
@@ -1861,11 +1862,7 @@ function handleHostMessage(clientPeerId, data) {
 
 function handleClientMessage(data) {
   if (data.type === 'init') {
-    seed = data.seed;
-    initNoise(seed);
-    generateMap();
-    generateBiomes();
-    
+    // La carte est déjà générée de manière identique car la seed est fixe (1337).
     resources = data.resources;
     trees = data.trees;
     placed = data.placed;
