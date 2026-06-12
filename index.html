@@ -27,6 +27,7 @@
   #hpFill{background:linear-gradient(90deg,#a32b24,#e0584e)}
   #foodFill{background:linear-gradient(90deg,#a06a14,#f2b441)}
   #waterFill{background:linear-gradient(90deg,#1f6e9e,#7fc4e8)}
+  #staminaFill{background:linear-gradient(90deg,#c98a1b,#f2b441)}
 
   #clock{top:14px;right:14px;text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
   #dayLabel{background:var(--panel);border:1px solid var(--panel-line);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:700;letter-spacing:1px}
@@ -116,10 +117,10 @@
 
 <!-- HUD -->
 <div class="hud" id="stats">
-  <div class="barWrap" title="Vie"><div id="hpFill" class="barFill" style="width:100%"></div><div id="hpTxt" class="barTxt">100</div></div>
-  <div class="barWrap" title="Faim"><div id="foodFill" class="barFill" style="width:100%"></div><div id="foodTxt" class="barTxt">100</div></div>
-  <div class="barWrap" title="Soif"><div id="waterFill" class="barFill" style="width:100%"></div><div id="waterTxt" class="barTxt">100</div></div>
-  <div class="barWrap" title="Endurance"><div id="staminaFill" class="barFill" style="width:100%"></div><div id="staminaTxt" class="barTxt">100</div></div>
+  <div class="bar" title="Vie"><div class="fill" id="hpFill"></div><div class="lab"><span>❤ VIE</span><span id="hpTxt">100</span></div></div>
+  <div class="bar" title="Faim"><div class="fill" id="foodFill"></div><div class="lab"><span>🍖 FAIM</span><span id="foodTxt">100</span></div></div>
+  <div class="bar" title="Soif"><div class="fill" id="waterFill"></div><div class="lab"><span>💧 SOIF</span><span id="waterTxt">100</span></div></div>
+  <div class="bar" title="Endurance"><div class="fill" id="staminaFill"></div><div class="lab"><span>⚡ ENDURANCE</span><span id="staminaTxt">100</span></div></div>
 </div>
 <div class="hud" id="clock">
   <div id="roomCodeDisplay" style="display:none; background:#b46ee0; border:1px solid #894dae; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:700; letter-spacing:1px; margin-bottom:6px; cursor:pointer;" onclick="navigator.clipboard.writeText(this.dataset.code); msg('📋 Code copié !','good');">🔑 CODE: <span id="roomCodeVal">-</span></div>
@@ -272,7 +273,7 @@ const LAKES=[{x:96,y:30,r:11},{x:34,y:46,r:8},{x:70,y:78,r:9},{x:104,y:64,r:6},{
 function genWorld(){
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
     // biome via bruit basse fréquence
-    const n=noise(x*0.045,y*0.045);
+    const n=noise(x*0.012,y*0.012);
     let b = n<0.34?2 : n<0.52?0 : n<0.74?1 : 3;
     biomeMap[y*MW+x]=b;
     const d=rnd();
@@ -513,6 +514,8 @@ addEventListener('keydown',e=>{
   if(/^Digit[0-9]$/.test(e.code)){const d=+e.code.slice(5);useHotbar(d===0?9:d-1);}
 });
 addEventListener('keyup',e=>keys[e.code]=false);
+window.addEventListener('blur',()=>keys={}); // Empêcher le perso de bouger tout seul
+const mouse={x:0,y:0,down:false};
 cv.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
 cv.addEventListener('mousedown',()=>{mouse.down=true;tryAttack();});
 addEventListener('mouseup',()=>mouse.down=false);
