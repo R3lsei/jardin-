@@ -963,6 +963,11 @@ function initAssets(callback) {
   }
 }
 
+function tileNoise(tx, ty, seed = 0) {
+  const x = Math.sin(tx * 12.9898 + ty * 78.233 + seed) * 43758.5453;
+  return x - Math.floor(x);
+}
+
 function renderChunk(cx, cy) {
   const size = CHUNK_SIZE * TS;
   const canvas = document.createElement('canvas');
@@ -1001,50 +1006,247 @@ function renderChunk(cx, cy) {
     }
   }
   
-  // 2. Transitions
+  // 2. Transitions with Drop Shadows for elevation relief
   for(let ty=y0;ty<=y1;ty++) {
     for(let tx=x0;tx<=x1;tx++) {
       const t=map[ty*MW+tx];
       const r=tileRank(t);
       if(r<=0 || !patterns[t]) continue;
       
-      ctx.fillStyle = patterns[t];
-      ctx.beginPath();
-      let didPath=false;
+      const shadowOffset = 1.2;
       
+      // Right edge transition
       if(tx<MW-1 && r>tileRank(map[ty*MW+tx+1])){
-        didPath=true;
+        // Draw drop shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        for(let i=0;i<4;i++){
+          const rng=Math.abs(Math.sin(tx*13.1+ty*7.3+i*5.1));
+          ctx.moveTo(tx*TS+TS+shadowOffset, ty*TS+(i+0.5)*8+shadowOffset);
+          ctx.arc(tx*TS+TS+rng*8+shadowOffset, ty*TS+(i+0.5)*8+shadowOffset, 4+rng*5, 0, 7);
+        }
+        ctx.fill();
+        
+        // Draw actual texture
+        ctx.fillStyle = patterns[t];
+        ctx.beginPath();
         for(let i=0;i<4;i++){
           const rng=Math.abs(Math.sin(tx*13.1+ty*7.3+i*5.1));
           ctx.moveTo(tx*TS+TS, ty*TS+(i+0.5)*8);
           ctx.arc(tx*TS+TS+rng*8, ty*TS+(i+0.5)*8, 4+rng*5, 0, 7);
         }
+        ctx.fill();
       }
+      
+      // Left edge transition
       if(tx>0 && r>tileRank(map[ty*MW+tx-1])){
-        didPath=true;
+        // Draw drop shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        for(let i=0;i<4;i++){
+          const rng=Math.abs(Math.sin(tx*11.2+ty*9.4+i*4.2));
+          ctx.moveTo(tx*TS+shadowOffset, ty*TS+(i+0.5)*8+shadowOffset);
+          ctx.arc(tx*TS-rng*8+shadowOffset, ty*TS+(i+0.5)*8+shadowOffset, 4+rng*5, 0, 7);
+        }
+        ctx.fill();
+        
+        // Draw actual texture
+        ctx.fillStyle = patterns[t];
+        ctx.beginPath();
         for(let i=0;i<4;i++){
           const rng=Math.abs(Math.sin(tx*11.2+ty*9.4+i*4.2));
           ctx.moveTo(tx*TS, ty*TS+(i+0.5)*8);
           ctx.arc(tx*TS-rng*8, ty*TS+(i+0.5)*8, 4+rng*5, 0, 7);
         }
+        ctx.fill();
       }
+      
+      // Down edge transition
       if(ty<MH-1 && r>tileRank(map[(ty+1)*MW+tx])){
-        didPath=true;
+        // Draw drop shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        for(let i=0;i<4;i++){
+          const rng=Math.abs(Math.sin(tx*8.5+ty*14.2+i*3.3));
+          ctx.moveTo(tx*TS+(i+0.5)*8+shadowOffset, ty*TS+TS+shadowOffset);
+          ctx.arc(tx*TS+(i+0.5)*8+shadowOffset, ty*TS+TS+rng*8+shadowOffset, 4+rng*5, 0, 7);
+        }
+        ctx.fill();
+        
+        // Draw actual texture
+        ctx.fillStyle = patterns[t];
+        ctx.beginPath();
         for(let i=0;i<4;i++){
           const rng=Math.abs(Math.sin(tx*8.5+ty*14.2+i*3.3));
           ctx.moveTo(tx*TS+(i+0.5)*8, ty*TS+TS);
           ctx.arc(tx*TS+(i+0.5)*8, ty*TS+TS+rng*8, 4+rng*5, 0, 7);
         }
+        ctx.fill();
       }
+      
+      // Up edge transition
       if(ty>0 && r>tileRank(map[(ty-1)*MW+tx])){
-        didPath=true;
+        // Draw drop shadow
+        ctx.fillStyle = 'rgba(0,0,0,0.18)';
+        ctx.beginPath();
+        for(let i=0;i<4;i++){
+          const rng=Math.abs(Math.sin(tx*6.7+ty*17.1+i*6.1));
+          ctx.moveTo(tx*TS+(i+0.5)*8+shadowOffset, ty*TS+shadowOffset);
+          ctx.arc(tx*TS+(i+0.5)*8+shadowOffset, ty*TS-rng*8+shadowOffset, 4+rng*5, 0, 7);
+        }
+        ctx.fill();
+        
+        // Draw actual texture
+        ctx.fillStyle = patterns[t];
+        ctx.beginPath();
         for(let i=0;i<4;i++){
           const rng=Math.abs(Math.sin(tx*6.7+ty*17.1+i*6.1));
           ctx.moveTo(tx*TS+(i+0.5)*8, ty*TS);
           ctx.arc(tx*TS+(i+0.5)*8, ty*TS-rng*8, 4+rng*5, 0, 7);
         }
+        ctx.fill();
       }
-      if(didPath) ctx.fill();
+    }
+  }
+
+  // 3. Ground Details & Life (Deterministic and themed for Miniature scaling)
+  function drawTileDecorations(ctx, t, tx, ty) {
+    const n1 = tileNoise(tx, ty, 10);
+    const n2 = tileNoise(tx, ty, 20);
+    
+    // Draw relative to chunk canvas coordinates
+    const cx = tx * TS + TS / 2;
+    const cy = ty * TS + TS / 2;
+    
+    if (t === 0 || t === 1) { // Grass
+      // Grass blades
+      if (n1 < 0.28) {
+        ctx.strokeStyle = '#345224';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 3, cy + 4);
+        ctx.quadraticCurveTo(cx - 5, cy - 4, cx - 7, cy - 2);
+        ctx.moveTo(cx, cy + 5);
+        ctx.quadraticCurveTo(cx - 1, cy - 7, cx - 2, cy - 6);
+        ctx.moveTo(cx + 3, cy + 4);
+        ctx.quadraticCurveTo(cx + 4, cy - 3, cx + 6, cy - 1);
+        ctx.stroke();
+      }
+      
+      // Giant petals / flowers (since player is 4mm, these are visible details)
+      if (n2 < 0.06) {
+        const colors = ['#f5e050', '#ffffff', '#e26b6b']; // Yellow, white, red clovers
+        const petalCol = colors[Math.floor(n1 * colors.length)];
+        
+        ctx.fillStyle = petalCol;
+        const petalSize = 2;
+        ctx.beginPath();
+        ctx.arc(cx - 2, cy, petalSize, 0, 7);
+        ctx.arc(cx + 2, cy, petalSize, 0, 7);
+        ctx.arc(cx, cy - 2, petalSize, 0, 7);
+        ctx.arc(cx, cy + 2, petalSize, 0, 7);
+        ctx.fill();
+        
+        ctx.fillStyle = '#d89020';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 1.5, 0, 7);
+        ctx.fill();
+      }
+    } else if (t === 2 || t === 5 || t === 7) { // Sand / Mud
+      // Small pebbles / large sand grains
+      if (n1 < 0.15) {
+        ctx.fillStyle = t === 7 ? '#3a2512' : '#a89470';
+        ctx.beginPath();
+        ctx.arc(cx + (n2 - 0.5) * 12, cy + (n1 - 0.5) * 12, 1.5 + n2 * 2, 0, 7);
+        ctx.fill();
+        
+        ctx.fillStyle = t === 7 ? '#50351a' : '#d2c2a4';
+        ctx.beginPath();
+        ctx.arc(cx + (n2 - 0.5) * 12 - 0.5, cy + (n1 - 0.5) * 12 - 0.5, 0.8, 0, 7);
+        ctx.fill();
+      }
+      // Dry twig / leaf fragment on mud
+      if (t === 7 && n2 < 0.08) {
+        ctx.strokeStyle = '#5c4018';
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.moveTo(cx - 6, cy - 4);
+        ctx.lineTo(cx + 6, cy + 4);
+        ctx.stroke();
+      }
+    } else if (t === 3 || t === 4) { // Water
+      // Water lily pad
+      if (n1 < 0.05) {
+        ctx.fillStyle = '#2d5e35';
+        ctx.beginPath();
+        ctx.arc(cx, cy, 3 + n2 * 3, 0.2, 5.9);
+        ctx.lineTo(cx, cy);
+        ctx.fill();
+        
+        if (n2 < 0.4) {
+          ctx.fillStyle = '#ff8ab0';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 1.5, 0, 7);
+          ctx.fill();
+        }
+      }
+    } else if (t === 6) { // Dark Grass (Forest floor)
+      // Fallen twigs
+      if (n1 < 0.16) {
+        ctx.strokeStyle = '#4e331b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 8, cy + (n2 - 0.5) * 8);
+        ctx.lineTo(cx + 8, cy - (n2 - 0.5) * 8);
+        ctx.stroke();
+      }
+      
+      // Giant mushrooms (red and white)
+      if (n2 < 0.04) {
+        const mx = cx + (n1 - 0.5) * 6;
+        const my = cy + (n2 - 0.5) * 6;
+        
+        ctx.fillStyle = '#e5dec9';
+        ctx.fillRect(mx - 1.5, my, 3, 5);
+        
+        ctx.fillStyle = '#ba2b2b';
+        ctx.beginPath();
+        ctx.arc(mx, my, 4, Math.PI, 0);
+        ctx.fill();
+        
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(mx - 1.5, my - 3, 1, 1);
+        ctx.fillRect(mx + 1, my - 2, 1, 1);
+      }
+      
+      // Pine needle
+      if (n1 > 0.85) {
+        ctx.strokeStyle = '#5a7c2b';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 5, cy - 2);
+        ctx.quadraticCurveTo(cx, cy + 2, cx + 5, cy - 1);
+        ctx.stroke();
+      }
+    } else if (t === 8) { // Dry Grass
+      // Dry twigs / straw clusters
+      if (n1 < 0.20) {
+        ctx.strokeStyle = '#735f34';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(cx - 4, cy + 3);
+        ctx.lineTo(cx + 4, cy - 3);
+        ctx.moveTo(cx - 2, cy - 4);
+        ctx.lineTo(cx + 3, cy + 4);
+        ctx.stroke();
+      }
+    }
+  }
+
+  for(let ty=y0;ty<=y1;ty++) {
+    for(let tx=x0;tx<=x1;tx++) {
+      const t=map[ty*MW+tx];
+      drawTileDecorations(ctx, t, tx, ty);
     }
   }
   
