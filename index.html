@@ -1555,32 +1555,66 @@ function hostGame() {
   const nick = document.getElementById('nicknameInput').value.trim();
   myNickname = nick || 'Hôte';
   netMode = 'host';
-  const roomCodeAttempt = generateRoomCode();
   
-  document.getElementById('connectionStatus').textContent = 'Création du serveur PeerJS...';
+  const statusEl = document.getElementById('connectionStatus');
   const errLog = document.getElementById('connectionErrorLog');
-  if (errLog) {
-    errLog.style.display = 'none';
-    errLog.textContent = '';
-  }
-  
+  if (errLog) { errLog.style.display = 'none'; errLog.textContent = ''; }
+
   if (typeof Peer === 'undefined') {
-    document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
+    statusEl.innerHTML = "❌ PeerJS non chargé. Désactivez votre bloqueur de pubs ou changez de navigateur.";
     return;
   }
 
-  // Timeout de connexion
-  let connectionTimeout = setTimeout(() => {
-    if (peer && !peer.open) {
-      document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
+  // Step 1: Test connectivity to PeerJS cloud server FIRST
+  statusEl.innerHTML = '🔍 Test de connexion au serveur PeerJS...';
+  
+  const testTimeout = setTimeout(() => {
+    statusEl.innerHTML = '⚠️ Le serveur PeerJS ne répond pas (test réseau échoué).<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
+    if (errLog) {
+      errLog.style.display = 'block';
+      errLog.textContent = "Le fetch vers https://0.peerjs.com/ a expiré après 5s.\nVotre réseau bloque probablement les connexions vers ce serveur.\nEssayez un autre réseau WiFi ou désactivez votre VPN/pare-feu.";
+    }
+  }, 5000);
+
+  fetch('https://0.peerjs.com/', { mode: 'no-cors', cache: 'no-store' })
+    .then(() => {
+      clearTimeout(testTimeout);
+      statusEl.innerHTML = '✅ Serveur joignable ! Connexion en cours...';
+      _doHostConnect(statusEl, errLog);
+    })
+    .catch((fetchErr) => {
+      clearTimeout(testTimeout);
+      statusEl.innerHTML = '⚠️ Serveur PeerJS injoignable.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
       if (errLog) {
         errLog.style.display = 'block';
-        errLog.textContent = "Détails: Le serveur public PeerJS (0.peerjs.com) n'a pas répondu. Cela se produit si le serveur est surchargé, si votre navigateur bloque les WebSockets sécurisés, ou si vous êtes derrière un pare-feu restrictif.";
+        errLog.textContent = `Fetch error: ${fetchErr.message}\nLe serveur 0.peerjs.com est bloqué par votre réseau ou navigateur.`;
       }
-      peer.destroy();
+    });
+}
+
+function _doHostConnect(statusEl, errLog) {
+  // Visual countdown
+  let secondsLeft = 8;
+  statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
+  const countdownInterval = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft > 0 && peer && !peer.open) {
+      statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
+    }
+  }, 1000);
+
+  const connectionTimeout = setTimeout(() => {
+    clearInterval(countdownInterval);
+    if (peer && !peer.open) {
+      statusEl.innerHTML = '❌ Délai dépassé (8s). Le serveur PeerJS n\'a pas répondu.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
+      if (errLog) {
+        errLog.style.display = 'block';
+        errLog.textContent = "Le serveur de signalisation PeerJS (0.peerjs.com:443) n'a pas envoyé de réponse 'open'.\nCauses possibles:\n- Serveur surchargé\n- Pare-feu ou proxy bloquant les WebSockets\n- Bloqueur de publicités interceptant la connexion";
+      }
+      try { peer.destroy(); } catch(e) {}
       peer = null;
     }
-  }, 10000);
+  }, 8000);
 
   try {
     peer = new Peer({
@@ -1588,34 +1622,38 @@ function hostGame() {
       port: 443,
       secure: true,
       key: 'peerjs',
-      debug: 3
+      path: '/',
+      debug: 2,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
     });
   } catch (e) {
     clearTimeout(connectionTimeout);
-    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS";
-    if (errLog) {
-      errLog.style.display = 'block';
-      errLog.textContent = `Exception: ${e.message}\nStack: ${e.stack}`;
-    }
+    clearInterval(countdownInterval);
+    statusEl.innerHTML = '❌ Erreur d\'initialisation PeerJS.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
+    if (errLog) { errLog.style.display = 'block'; errLog.textContent = `Exception: ${e.message}`; }
     return;
   }
   
   peer.on('open', (id) => {
     clearTimeout(connectionTimeout);
+    clearInterval(countdownInterval);
     roomCode = id;
-    document.getElementById('connectionStatus').textContent = 'Partie créée ! Code : ' + id;
+    statusEl.textContent = '✅ Partie créée ! Code : ' + id;
     document.getElementById('roomCodeDisplay').style.display = 'block';
     document.getElementById('roomCodeDisplay').dataset.code = id;
     document.getElementById('roomCodeVal').textContent = id;
     
     startGame();
-
-    // Copy the code to clipboard automatically and display messages on HUD
-    msg('🔑 Partie Créée ! Partagez le code en haut à droite.', 'good');
-    msg(`Code : ${id}`, 'good');
+    msg('🔑 Partie créée ! Partagez le code en haut à droite.', 'good');
+    msg('Code : ' + id, 'good');
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(id).then(() => {
-        msg('📋 Code copié automatiquement dans le presse-papiers !', 'good');
+        msg('📋 Code copié dans le presse-papiers !', 'good');
       }).catch(() => {});
     }
   });
@@ -1640,14 +1678,10 @@ function hostGame() {
         questIdx: questIdx
       });
     });
-    
-    c.on('data', (data) => {
-      handleHostMessage(c.peer, data);
-    });
-    
+    c.on('data', (data) => { handleHostMessage(c.peer, data); });
     c.on('close', () => {
       const rp = remotePlayers[c.peer];
-      msg('👤 ' + (rp ? rp.nickname : 'Un joueur') + ' a quitté la partie.', 'bad');
+      msg('👤 ' + (rp ? rp.nickname : 'Un joueur') + ' a quitté.', 'bad');
       delete remotePlayers[c.peer];
       connections = connections.filter(x => x !== c);
     });
@@ -1655,16 +1689,12 @@ function hostGame() {
   
   peer.on('error', (err) => {
     clearTimeout(connectionTimeout);
+    clearInterval(countdownInterval);
     console.error(err);
-    let msgStr = 'Erreur lors de la création : ' + err.type;
-    if (err.type === 'unavailable-id') {
-      msgStr = "Le code de partie est déjà utilisé. Veuillez réessayer.";
-    }
-    document.getElementById('connectionStatus').textContent = msgStr;
-    if (errLog) {
-      errLog.style.display = 'block';
-      errLog.textContent = `Erreur PeerJS: ${err.type || 'inconnue'}\nMessage: ${err.message || 'aucun message détaillé'}`;
-    }
+    let msgStr = 'Erreur : ' + err.type;
+    if (err.type === 'unavailable-id') msgStr = "Code déjà utilisé. Réessayez.";
+    statusEl.innerHTML = '❌ ' + msgStr + '<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="hostGame()">🔄 Réessayer</button>';
+    if (errLog) { errLog.style.display = 'block'; errLog.textContent = `Type: ${err.type}\nMessage: ${err.message}`; }
   });
 }
 
@@ -1673,36 +1703,62 @@ function joinGame() {
   myNickname = nick || 'Client';
   const targetCode = document.getElementById('roomCodeInput').value.trim().toLowerCase();
   
+  const statusEl = document.getElementById('connectionStatus');
+  const errLog = document.getElementById('connectionErrorLog');
+  if (errLog) { errLog.style.display = 'none'; errLog.textContent = ''; }
+
   if (!targetCode) {
-    document.getElementById('connectionStatus').textContent = 'Veuillez entrer un code !';
+    statusEl.textContent = '⚠️ Veuillez entrer un code !';
     return;
   }
   
   netMode = 'client';
-  document.getElementById('connectionStatus').textContent = 'Connexion à PeerJS...';
-  const errLog = document.getElementById('connectionErrorLog');
-  if (errLog) {
-    errLog.style.display = 'none';
-    errLog.textContent = '';
-  }
-  
+
   if (typeof Peer === 'undefined') {
-    document.getElementById('connectionStatus').textContent = "Erreur: La bibliothèque PeerJS n'a pas pu être chargée. Veuillez désactiver votre bloqueur de publicités ou changer de navigateur.";
+    statusEl.innerHTML = "❌ PeerJS non chargé. Désactivez votre bloqueur de pubs.";
     return;
   }
 
-  // Timeout de connexion
-  let connectionTimeout = setTimeout(() => {
+  // Step 1: Test connectivity
+  statusEl.innerHTML = '🔍 Test de connexion au serveur PeerJS...';
+  
+  const testTimeout = setTimeout(() => {
+    statusEl.innerHTML = '⚠️ Le serveur PeerJS ne répond pas.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+    if (errLog) { errLog.style.display = 'block'; errLog.textContent = "Fetch vers 0.peerjs.com expiré."; }
+  }, 5000);
+
+  fetch('https://0.peerjs.com/', { mode: 'no-cors', cache: 'no-store' })
+    .then(() => {
+      clearTimeout(testTimeout);
+      statusEl.innerHTML = '✅ Serveur joignable ! Connexion...';
+      _doJoinConnect(statusEl, errLog, targetCode);
+    })
+    .catch((fetchErr) => {
+      clearTimeout(testTimeout);
+      statusEl.innerHTML = '⚠️ Serveur PeerJS injoignable.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+      if (errLog) { errLog.style.display = 'block'; errLog.textContent = `Fetch error: ${fetchErr.message}`; }
+    });
+}
+
+function _doJoinConnect(statusEl, errLog, targetCode) {
+  let secondsLeft = 8;
+  statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
+  const countdownInterval = setInterval(() => {
+    secondsLeft--;
+    if (secondsLeft > 0 && peer && !peer.open) {
+      statusEl.innerHTML = `⏳ Connexion au serveur... (${secondsLeft}s)`;
+    }
+  }, 1000);
+
+  const connectionTimeout = setTimeout(() => {
+    clearInterval(countdownInterval);
     if (peer && !peer.open) {
-      document.getElementById('connectionStatus').textContent = "Délai d'attente dépassé (10s). Impossible de contacter le serveur PeerJS. Réessayez.";
-      if (errLog) {
-        errLog.style.display = 'block';
-        errLog.textContent = "Détails: Le serveur public PeerJS (0.peerjs.com) n'a pas répondu. Cela se produit si le serveur est surchargé, si votre navigateur bloque les WebSockets sécurisés, ou si vous êtes derrière un pare-feu restrictif.";
-      }
-      peer.destroy();
+      statusEl.innerHTML = '❌ Délai dépassé (8s).<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+      if (errLog) { errLog.style.display = 'block'; errLog.textContent = "Timeout en attendant le serveur PeerJS."; }
+      try { peer.destroy(); } catch(e) {}
       peer = null;
     }
-  }, 10000);
+  }, 8000);
 
   try {
     peer = new Peer({
@@ -1710,31 +1766,33 @@ function joinGame() {
       port: 443,
       secure: true,
       key: 'peerjs',
-      debug: 3
+      path: '/',
+      debug: 2,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
     });
   } catch (e) {
     clearTimeout(connectionTimeout);
-    document.getElementById('connectionStatus').textContent = "Erreur d'initialisation PeerJS";
-    if (errLog) {
-      errLog.style.display = 'block';
-      errLog.textContent = `Exception: ${e.message}\nStack: ${e.stack}`;
-    }
+    clearInterval(countdownInterval);
+    statusEl.innerHTML = '❌ Erreur d\'initialisation.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+    if (errLog) { errLog.style.display = 'block'; errLog.textContent = `Exception: ${e.message}`; }
     return;
   }
   
   peer.on('open', (id) => {
     clearTimeout(connectionTimeout);
-    document.getElementById('connectionStatus').textContent = 'Connexion à la partie ' + targetCode + '...';
+    clearInterval(countdownInterval);
+    statusEl.textContent = '🔗 Connexion à la partie ' + targetCode + '...';
     conn = peer.connect(targetCode);
     
     conn.on('open', () => {
-      document.getElementById('connectionStatus').textContent = 'Connecté ! Chargement du monde...';
+      statusEl.textContent = '✅ Connecté ! Chargement du monde...';
     });
-    
-    conn.on('data', (data) => {
-      handleClientMessage(data);
-    });
-    
+    conn.on('data', (data) => { handleClientMessage(data); });
     conn.on('close', () => {
       msg('🔌 Déconnecté de l\'hôte.', 'bad');
       setTimeout(() => location.reload(), 1500);
@@ -1743,18 +1801,13 @@ function joinGame() {
   
   peer.on('error', (err) => {
     clearTimeout(connectionTimeout);
+    clearInterval(countdownInterval);
     console.error(err);
-    let msgStr = 'Erreur de connexion : ' + err.type;
-    if (err.type === 'peer-unavailable') {
-      msgStr = "Code de partie introuvable ou l'hôte s'est déconnecté.";
-    } else if (err.type === 'network') {
-      msgStr = "Problème réseau lors de la connexion.";
-    }
-    document.getElementById('connectionStatus').textContent = msgStr;
-    if (errLog) {
-      errLog.style.display = 'block';
-      errLog.textContent = `Erreur PeerJS: ${err.type || 'inconnue'}\nMessage: ${err.message || 'aucun message détaillé'}`;
-    }
+    let msgStr = 'Erreur : ' + err.type;
+    if (err.type === 'peer-unavailable') msgStr = "Partie introuvable ou hôte déconnecté.";
+    else if (err.type === 'network') msgStr = "Problème réseau.";
+    statusEl.innerHTML = '❌ ' + msgStr + '<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+    if (errLog) { errLog.style.display = 'block'; errLog.textContent = `Type: ${err.type}\nMessage: ${err.message}`; }
   });
 }
 
