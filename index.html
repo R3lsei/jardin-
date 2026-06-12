@@ -3,7 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MICRO-JARDIN — Aventure de survie</title>
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
+<title>MICRO-JARDIN v5 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1617,20 +1620,7 @@ function _doHostConnect(statusEl, errLog) {
   }, 8000);
 
   try {
-    peer = new Peer({
-      host: '0.peerjs.com',
-      port: 443,
-      secure: true,
-      key: 'peerjs',
-      path: '/',
-      debug: 2,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      }
-    });
+    peer = new Peer();
   } catch (e) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
@@ -1761,20 +1751,7 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
   }, 8000);
 
   try {
-    peer = new Peer({
-      host: '0.peerjs.com',
-      port: 443,
-      secure: true,
-      key: 'peerjs',
-      path: '/',
-      debug: 2,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      }
-    });
+    peer = new Peer();
   } catch (e) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
