@@ -2195,15 +2195,21 @@ function loop(t){
 }
 
 function updateInsects(dt) {
-  if (insects.length < 15) {
-    const isBee = Math.random() < 0.35;
+  const night = isNight();
+  if (insects.length < 18) {
+    let type = 'butterfly';
+    if (night) {
+      type = Math.random() < 0.65 ? 'luciole' : 'butterfly';
+    } else {
+      type = Math.random() < 0.35 ? 'bee' : 'butterfly';
+    }
     const colors = ['#4fc3f7', '#ffb74d', '#e57373', '#f0f4c3', '#ba68c8'];
     insects.push({
       x: player.x + R(-450, 450),
       y: player.y + R(-450, 450),
-      type: isBee ? 'bee' : 'butterfly',
-      color: isBee ? '' : colors[Math.floor(Math.random() * colors.length)],
-      speed: isBee ? R(45, 75) : R(25, 45),
+      type: type,
+      color: type === 'butterfly' ? colors[Math.floor(Math.random() * colors.length)] : '',
+      speed: type === 'bee' ? R(45, 75) : type === 'luciole' ? R(14, 28) : R(25, 45),
       angle: R(0, 6.28),
       phase: R(0, 100),
       target: null,
@@ -2212,7 +2218,7 @@ function updateInsects(dt) {
   }
   for (let i = insects.length - 1; i >= 0; i--) {
     const ins = insects[i];
-    if (dist(player, ins) > 650) {
+    if (dist(player, ins) > 650 || (ins.type === 'luciole' && !night)) {
       insects.splice(i, 1);
       continue;
     }
@@ -2696,6 +2702,28 @@ function render(){
       cx.beginPath();
       cx.ellipse(-1, 4 + wingSway * 0.1, 2, 4, 0.4 + wingSway * 0.05, 0, 7);
       cx.fill();
+    } else if (ins.type === 'luciole') {
+      const blink = Math.sin(performance.now() * 0.01 + ins.phase);
+      const intensity = Math.max(0.2, (blink + 1) / 2);
+      
+      cx.fillStyle = `rgba(215, 255, 90, ${intensity})`;
+      cx.beginPath();
+      cx.arc(0, 0, 2.5, 0, 7);
+      cx.fill();
+      
+      const grad = cx.createRadialGradient(0, 0, 1, 0, 0, 8);
+      grad.addColorStop(0, `rgba(215, 255, 90, ${0.4 * intensity})`);
+      grad.addColorStop(1, 'rgba(215, 255, 90, 0)');
+      cx.fillStyle = grad;
+      cx.beginPath();
+      cx.arc(0, 0, 8, 0, 7);
+      cx.fill();
+      
+      cx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+      cx.beginPath();
+      cx.ellipse(-1, -2, 1, 2, -0.4, 0, 7);
+      cx.ellipse(-1, 2, 1, 2, 0.4, 0, 7);
+      cx.fill();
     } else {
       // Papillon
       // Corps noir fin
@@ -3153,6 +3181,24 @@ function drawDarkness(){
     g2.addColorStop(0,'rgba(0,0,0,1)');g2.addColorStop(1,'rgba(0,0,0,0)');
     l.fillStyle=g2;l.beginPath();l.arc(fx,fy,fr,0,7);l.fill();
   }
+  for (const ins of insects) {
+    if (ins.type === 'luciole') {
+      const ix = ins.x - cam.x;
+      const iy = ins.y - cam.y;
+      if (ix > -30 && iy > -30 && ix < cv.width + 30 && iy < cv.height + 30) {
+        const blink = Math.sin(performance.now() * 0.01 + ins.phase);
+        const intensity = Math.max(0.15, (blink + 1) / 2);
+        const ir = 22 + intensity * 8;
+        const gIns = l.createRadialGradient(ix, iy, ir * 0.1, ix, iy, ir);
+        gIns.addColorStop(0, `rgba(0,0,0,${0.85 * intensity})`);
+        gIns.addColorStop(1, 'rgba(0,0,0,0)');
+        l.fillStyle = gIns;
+        l.beginPath();
+        l.arc(ix, iy, ir, 0, 7);
+        l.fill();
+      }
+    }
+  }
   cx.drawImage(lc,0,0);
   
   // Lumières colorées
@@ -3168,6 +3214,24 @@ function drawDarkness(){
     const g2=cx.createRadialGradient(fx,fy,20,fx,fy,fr);
     g2.addColorStop(0,'rgba(255,120,30,0.2)');g2.addColorStop(1,'rgba(255,120,30,0)');
     cx.fillStyle=g2;cx.beginPath();cx.arc(fx,fy,fr,0,7);cx.fill();
+  }
+  for (const ins of insects) {
+    if (ins.type === 'luciole') {
+      const ix = ins.x - cam.x;
+      const iy = ins.y - cam.y;
+      if (ix > -30 && iy > -30 && ix < cv.width + 30 && iy < cv.height + 30) {
+        const blink = Math.sin(performance.now() * 0.01 + ins.phase);
+        const intensity = Math.max(0.15, (blink + 1) / 2);
+        const ir = 25 + intensity * 8;
+        const gGl = cx.createRadialGradient(ix, iy, 1, ix, iy, ir);
+        gGl.addColorStop(0, `rgba(215,255,90,${0.18 * intensity})`);
+        gGl.addColorStop(1, 'rgba(215,255,90,0)');
+        cx.fillStyle = gGl;
+        cx.beginPath();
+        cx.arc(ix, iy, ir, 0, 7);
+        cx.fill();
+      }
+    }
   }
   cx.globalCompositeOperation='source-over';
 }
