@@ -1270,6 +1270,16 @@ function render(){
   /* tuiles */
   cx.save();
   cx.translate(-cam.x, -cam.y);
+  
+  function tileRank(t) {
+    if(t===3||t===4) return 0; // Eau
+    if(t===2||t===5||t===7) return 1; // Sable/Boue
+    if(t===8) return 2; // Herbe sèche
+    if(t===0||t===1) return 3; // Herbe
+    if(t===6) return 4; // Herbe sombre
+    return -1;
+  }
+
   for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
     const t=map[ty*MW+tx];
     if(patterns[t]){
@@ -1280,6 +1290,52 @@ function render(){
       cx.fillRect(tx*TS, ty*TS, TS+1, TS+1);
     }
   }
+  
+  // Transitions organiques
+  for(let ty=y0;ty<=y1;ty++)for(let tx=x0;tx<=x1;tx++){
+    const t=map[ty*MW+tx];
+    const r=tileRank(t);
+    if(r<=0 || !patterns[t]) continue;
+    
+    cx.fillStyle = patterns[t];
+    cx.beginPath();
+    let didPath=false;
+    
+    if(tx<MW-1 && r>tileRank(map[ty*MW+tx+1])){
+      didPath=true;
+      for(let i=0;i<4;i++){
+        const rng=Math.abs(Math.sin(tx*13.1+ty*7.3+i*5.1));
+        cx.moveTo(tx*TS+TS, ty*TS+(i+0.5)*8);
+        cx.arc(tx*TS+TS+rng*8, ty*TS+(i+0.5)*8, 4+rng*5, 0, 7);
+      }
+    }
+    if(tx>0 && r>tileRank(map[ty*MW+tx-1])){
+      didPath=true;
+      for(let i=0;i<4;i++){
+        const rng=Math.abs(Math.sin(tx*11.2+ty*9.4+i*4.2));
+        cx.moveTo(tx*TS, ty*TS+(i+0.5)*8);
+        cx.arc(tx*TS-rng*8, ty*TS+(i+0.5)*8, 4+rng*5, 0, 7);
+      }
+    }
+    if(ty<MH-1 && r>tileRank(map[(ty+1)*MW+tx])){
+      didPath=true;
+      for(let i=0;i<4;i++){
+        const rng=Math.abs(Math.sin(tx*8.5+ty*14.2+i*3.3));
+        cx.moveTo(tx*TS+(i+0.5)*8, ty*TS+TS);
+        cx.arc(tx*TS+(i+0.5)*8, ty*TS+TS+rng*8, 4+rng*5, 0, 7);
+      }
+    }
+    if(ty>0 && r>tileRank(map[(ty-1)*MW+tx])){
+      didPath=true;
+      for(let i=0;i<4;i++){
+        const rng=Math.abs(Math.sin(tx*6.7+ty*17.1+i*6.1));
+        cx.moveTo(tx*TS+(i+0.5)*8, ty*TS);
+        cx.arc(tx*TS+(i+0.5)*8, ty*TS-rng*8, 4+rng*5, 0, 7);
+      }
+    }
+    if(didPath) cx.fill();
+  }
+  
   cx.restore();
 
   // animations
