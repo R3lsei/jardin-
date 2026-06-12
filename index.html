@@ -272,28 +272,93 @@ const BOSS_LAIR={x:112*TS, y:112*TS};
 const LAKES=[{x:96,y:30,r:11},{x:34,y:46,r:8},{x:70,y:78,r:9},{x:104,y:64,r:6},{x:48,y:14,r:7}];
 
 function genWorld(){
-  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
-    // biome via bruit basse fréquence
-    const n=noise(x*0.012,y*0.012);
-    let b = n<0.34?2 : n<0.52?0 : n<0.74?1 : 3;
-    biomeMap[y*MW+x]=b;
-    const d=rnd();
-    let t;
-    if(b===0)t = d<0.12?1 : d<0.17?2 : 0;          // prairie
-    else if(b===1)t = d<0.2?1 : 6;                  // forêt : herbe sombre
-    else if(b===2)t = d<0.35?7 : d<0.42?1 : 0;      // marais : boue
-    else t = d<0.55?8 : d<0.75?5 : 2;                // clairière sèche
-    map[y*MW+x]=t;
+  // 1. Define the river center for each row
+  const rx = [];
+  for (let y = 0; y < MH; y++) {
+    rx[y] = 85 + Math.sin(y * 0.08) * 12 + Math.cos(y * 0.03) * 6;
   }
-  // lacs
-  for(const L of LAKES)lakeBlob(L.x,L.y,L.r);
-  // flaques du marais
-  for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
-    if(biomeMap[y*MW+x]===2&&rnd()<0.012)lakeBlob(x,y,1+Math.floor(rnd()*2));
+  
+  // 2. Generate tiles based on the river and zones
+  for(let y=0;y<MH;y++) {
+    for(let x=0;x<MW;x++) {
+      const rCenter = rx[y];
+      const distToRiver = x - rCenter;
+      const absDist = Math.abs(distToRiver);
+      
+      let b; // Biome
+      let t; // Tile
+      
+      // Determine biome based on river side
+      if (distToRiver < -5) {
+        // West side: Savanna (Clairière Sèche)
+        b = 3; 
+      } else if (distToRiver > 5) {
+        // East side: Prairie (North) or Swamp (South)
+        if (y > 80) {
+          b = 2; // Swamp (Marais des Mousses)
+        } else {
+          b = 0; // Prairie (Plaines)
+        }
+      } else {
+        // Near river: transition zone
+        b = distToRiver < 0 ? 3 : (y > 80 ? 2 : 0);
+      }
+      
+      biomeMap[y*MW+x] = b;
+      
+      // Select tile based on biome and distance to river (beaches)
+      const d = rnd();
+      if (absDist < 4.0) {
+        // River water!
+        t = 3; 
+      } else if (absDist < 5.2) {
+        // River beach sand!
+        t = 5; 
+      } else {
+        // Normal biome tile
+        if (b === 0) {
+          // Prairie
+          t = d < 0.12 ? 1 : (d < 0.17 ? 2 : 0); // grass, tall grass, dirt
+        } else if (b === 2) {
+          // Swamp
+          t = d < 0.35 ? 7 : (d < 0.42 ? 1 : 0); // mud, tall grass, grass
+        } else if (b === 3) {
+          // Savanna (dry grass)
+          t = d < 0.55 ? 8 : (d < 0.75 ? 5 : 2); // dry grass, sand, dirt
+        }
+      }
+      map[y*MW+x] = t;
+    }
   }
-  // plages de sable autour de l'eau
+  
+  // 3. Make the branch bridge walkable: set tiles at y=89..91 and x=rx(90)-6..rx(90)+6 to dirt (t=2)
+  const bridgeY = 90;
+  const rxAtBridge = rx[bridgeY];
+  const bridgeStart = Math.floor(rxAtBridge - 6);
+  const bridgeEnd = Math.floor(rxAtBridge + 6);
+  
+  for (let y = bridgeY - 1; y <= bridgeY + 1; y++) {
+    for (let x = bridgeStart; x <= bridgeEnd; x++) {
+      if (x >= 0 && x < MW && y >= 0 && y < MH) {
+        map[y * MW + x] = 2; // Coarse dirt (walkable!)
+      }
+    }
+  }
+  
+  // 4. Generate other features (lakes, rock blobs, special clearings)
+  // Lakes: place them on prairie/savanna (away from the river and swamp)
+  for(const L of LAKES) {
+    if (Math.abs(L.y - bridgeY) > 12) {
+      lakeBlob(L.x, L.y, L.r);
+    }
+  }
+  
+  // Plages de sable autour des lacs (uniquement hors du marais et rivière)
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
     if(map[y*MW+x]!==3)continue;
+    // skip main river for beach styling (already generated)
+    if (Math.abs(x - rx[y]) < 8) continue;
+    
     for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
       const X=x+dx,Y=y+dy;
       if(X<0||Y<0||X>=MW||Y>=MH)continue;
@@ -301,14 +366,29 @@ function genWorld(){
       if(map[i]!==3&&map[i]!==4&&Math.hypot(dx,dy)<=2.2&&biomeMap[i]!==2)map[i]=5;
     }
   }
-  // chemin de terre
-  for(let t=0;t<300;t++){ const x=Math.floor(10+t*0.36), y=Math.floor(112-t*0.32+Math.sin(t*0.1)*3); blob(x,y,2,2,true); }
-  // amas rocheux
-  for(let i=0;i<16;i++)blob(Math.floor(rnd()*MW),Math.floor(rnd()*MH),2+Math.floor(rnd()*2),4);
-  // zones spéciales dégagées
-  blob(BOSS_LAIR.x/TS|0,BOSS_LAIR.y/TS|0,8,2);
-  blob(MACHINE.x/TS|0,MACHINE.y/TS|0,5,5);
-  blob(SPAWN.x/TS|0,SPAWN.y/TS|0,4,0);
+  
+  // Chemin de terre (uniquement à l'Ouest de la rivière)
+  for(let t=0;t<180;t++){ 
+    const x=Math.floor(10+t*0.36);
+    const y=Math.floor(112-t*0.32+Math.sin(t*0.1)*3); 
+    if (x < rx[y] - 8) {
+      blob(x,y,2,2,true); 
+    }
+  }
+  
+  // Amas rocheux
+  for(let i=0;i<16;i++) {
+    const rxPos = Math.floor(rnd() * MW);
+    const ryPos = Math.floor(rnd() * MH);
+    if (Math.abs(rxPos - rx[ryPos]) > 8) {
+      blob(rxPos, ryPos, 2+Math.floor(rnd()*2), 4);
+    }
+  }
+  
+  // Spawn clearings
+  blob(BOSS_LAIR.x/TS|0,BOSS_LAIR.y/TS|0,8,2); // Boss lair is dirt
+  blob(MACHINE.x/TS|0,MACHINE.y/TS|0,5,5); // Machine area is sand
+  blob(SPAWN.x/TS|0,SPAWN.y/TS|0,4,0); // Spawn is grass
 }
 function blob(cx0,cy0,r,t,soft){
   for(let y=cy0-r;y<=cy0+r;y++)for(let x=cx0-r;x<=cx0+r;x++){
@@ -1287,6 +1367,101 @@ function renderChunk(cx, cy) {
       const t=map[ty*MW+tx];
       drawTileDecorations(ctx, t, tx, ty);
     }
+  }
+
+  // Draw the giant branch bridge overlay
+  const bridgeY = 90;
+  const rxAtBridge = 85 + Math.sin(bridgeY * 0.08) * 12 + Math.cos(bridgeY * 0.03) * 6;
+  const xStartPix = (rxAtBridge - 5.5) * TS;
+  const xEndPix = (rxAtBridge + 5.5) * TS;
+  const yPix = bridgeY * TS + TS / 2;
+  
+  const chunkX0 = cx * CHUNK_SIZE * TS;
+  const chunkX1 = (cx + 1) * CHUNK_SIZE * TS;
+  const chunkY0 = cy * CHUNK_SIZE * TS;
+  const chunkY1 = (cy + 1) * CHUNK_SIZE * TS;
+  
+  if (yPix >= chunkY0 - 30 && yPix <= chunkY1 + 30 && xEndPix >= chunkX0 && xStartPix <= chunkX1) {
+    ctx.save();
+    
+    // 1. Drop shadow of the branch
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 28;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xStartPix, yPix + 14);
+    ctx.lineTo(xEndPix, yPix + 14);
+    ctx.stroke();
+    
+    // 2. Bark border / base wood (dark brown)
+    ctx.strokeStyle = '#3e2715';
+    ctx.lineWidth = 24;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xStartPix, yPix);
+    ctx.lineTo(xEndPix, yPix);
+    ctx.stroke();
+    
+    // 3. Main bark body (warm brown)
+    ctx.strokeStyle = '#5a3d24';
+    ctx.lineWidth = 20;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xStartPix, yPix);
+    ctx.lineTo(xEndPix, yPix);
+    ctx.stroke();
+    
+    // 4. Highlighted top edge (light wood/moss base)
+    ctx.strokeStyle = '#735132';
+    ctx.lineWidth = 12;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(xStartPix, yPix - 3);
+    ctx.lineTo(xEndPix, yPix - 3);
+    ctx.stroke();
+    
+    // 5. Wood cracks & grain lines
+    ctx.strokeStyle = '#28170b';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([12, 24]);
+    ctx.beginPath();
+    ctx.moveTo(xStartPix + 10, yPix - 4);
+    ctx.lineTo(xEndPix - 10, yPix - 4);
+    ctx.moveTo(xStartPix + 30, yPix + 3);
+    ctx.lineTo(xEndPix - 30, yPix + 3);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // 6. Moss growing on the branch
+    ctx.strokeStyle = '#4c8227';
+    ctx.lineWidth = 5;
+    ctx.setLineDash([8, 16]);
+    ctx.beginPath();
+    ctx.moveTo(xStartPix + 15, yPix - 7);
+    ctx.lineTo(xEndPix - 15, yPix - 7);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // 7. Small leaf sprouts (miniature details)
+    ctx.fillStyle = '#6fb342';
+    const numLeaves = 10;
+    for (let i = 0; i < numLeaves; i++) {
+      const tParam = i / (numLeaves - 1);
+      const leafX = xStartPix + 20 + tParam * (xEndPix - xStartPix - 40);
+      const leafY = yPix + Math.sin(i * 2.3) * 7 - 4;
+      ctx.beginPath();
+      ctx.ellipse(leafX, leafY, 5, 2.5, 0.4 * Math.sin(i), 0, 7);
+      ctx.fill();
+      
+      // Leaf highlight
+      ctx.fillStyle = '#a2db58';
+      ctx.beginPath();
+      ctx.ellipse(leafX - 1.5, leafY - 0.8, 2, 1, 0.4 * Math.sin(i), 0, 7);
+      ctx.fill();
+      ctx.fillStyle = '#6fb342'; // Restore fill
+    }
+    
+    ctx.restore();
   }
   
   ctx.restore();
