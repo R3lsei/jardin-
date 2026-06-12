@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v5 — Aventure de survie</title>
+<title>MICRO-JARDIN v9 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -223,6 +223,7 @@
 /* ---------- MULTIJOUEUR GLOBALS ---------- */
 let netMode = 'solo'; // 'solo', 'host', 'client'
 let myNickname = 'Joueur';
+let roomCode = '';
 let peer = null;
 let conn = null; // Client side connection to Host
 let connections = []; // Host side list of connections to Clients
