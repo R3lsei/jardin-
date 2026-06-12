@@ -168,11 +168,11 @@
   </div>
   <div id="menuButtons" style="display:flex; gap:16px; margin-top:10px;">
     <button class="bigbtn" onclick="startGame()">▶ Mode Solo</button>
-    <button class="bigbtn" style="background:#b46ee0; box-shadow:0 5px 0 #894dae,0 10px 24px rgba(0,0,0,.5);" onclick="showMultiplayerMenu()">👥 Multijoueur</button>
+    <button class="bigbtn" style="background:#b46ee0; box-shadow:0 5px 0 #894dae,0 10px 24px rgba(0,0,0,.5);" onclick="showMultiplayerMenu()">👥 Multijoueur (v4)</button>
   </div>
 
   <div id="multiplayerMenu" style="display:none; flex-direction:column; gap:12px; margin-top:20px; width:100%; max-width:400px; background:rgba(0,0,0,0.5); padding:16px; border-radius:12px; border:1px solid var(--panel-line); align-items:center;">
-    <h3 style="color:var(--amber); letter-spacing:2px; font-size:14px; text-transform:uppercase; margin-bottom:4px;">Configuration Multijoueur (v3)</h3>
+    <h3 style="color:var(--amber); letter-spacing:2px; font-size:14px; text-transform:uppercase; margin-bottom:4px;">Configuration Multijoueur (v4)</h3>
     
     <div style="width:100%; text-align:left;">
       <label style="font-size:11px; color:var(--amber); font-weight:bold; text-transform:uppercase;">1. Votre Pseudo :</label>
@@ -1584,6 +1584,9 @@ function hostGame() {
 
   try {
     peer = new Peer({
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
       key: 'peerjs',
       debug: 3
     });
@@ -1703,6 +1706,9 @@ function joinGame() {
 
   try {
     peer = new Peer({
+      host: '0.peerjs.com',
+      port: 443,
+      secure: true,
       key: 'peerjs',
       debug: 3
     });
