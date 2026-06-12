@@ -1442,7 +1442,10 @@ function drawResource(r,x,y){
 
 function drawEnemy(e,x,y){
   cx.save();cx.translate(x,y);
-  if(e.hitT>0){cx.globalAlpha=0.6+Math.sin(performance.now()/30)*0.4;}
+  // Ombre sous l'ennemi
+  cx.fillStyle='rgba(0,0,0,.4)';cx.beginPath();cx.ellipse(0,e.r*0.6,e.r*1.1,e.r*0.45,0,0,7);cx.fill();
+  
+  if(e.hitT>0){cx.filter='brightness(2)';}
   const t=performance.now()/200;
   if(e.type==='araignee'||e.boss){
     const s=e.boss?2.2:1;
@@ -1500,8 +1503,11 @@ function drawPlayer(x,y){
   const t=performance.now()/100;
   const bob=Math.sin(player.walkT||0)*1.5;
   cx.save();cx.translate(x,y+bob);
-  if(player.iFrames>0)cx.globalAlpha=0.5+Math.sin(performance.now()/40)*0.3;
-  cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(0,12-bob,10,4,0,0,7);cx.fill();
+  
+  // Ombre
+  cx.fillStyle='rgba(0,0,0,.35)';cx.beginPath();cx.ellipse(0,5,13,5.5,0,0,7);cx.fill();
+  
+  if(player.iFrames>0&&performance.now()%200<100){cx.restore();return;}
   if(has('armure')){cx.fillStyle='#5e4630';cx.beginPath();cx.ellipse(0,4,9,11,0,0,7);cx.fill();}
   cx.fillStyle='#3f6ea8';cx.beginPath();cx.ellipse(0,3,7,9,0,0,7);cx.fill();
   cx.fillStyle='#e8b88f';cx.beginPath();cx.arc(0,-8,6,0,7);cx.fill();
@@ -1551,14 +1557,14 @@ function drawFire(x,y,t){
 
 function drawDarkness(){
   let dark=0;
-  if(timeOfDay>DAY_LEN-20&&timeOfDay<DAY_LEN)dark=(timeOfDay-(DAY_LEN-20))/20*0.78;
-  else if(isNight())dark=0.78;
-  if(timeOfDay<14)dark=Math.max(dark,0.78*(1-timeOfDay/14));
+  if(timeOfDay>DAY_LEN-20&&timeOfDay<DAY_LEN)dark=(timeOfDay-(DAY_LEN-20))/20*0.82;
+  else if(isNight())dark=0.82;
+  if(timeOfDay<14)dark=Math.max(dark,0.82*(1-timeOfDay/14));
   if(dark<=0.01)return;
   const lc=document.createElement('canvas');
   lc.width=cv.width;lc.height=cv.height;
   const l=lc.getContext('2d');
-  l.fillStyle=`rgba(8,10,30,${dark})`;l.fillRect(0,0,lc.width,lc.height);
+  l.fillStyle=`rgba(5,6,20,${dark})`;l.fillRect(0,0,lc.width,lc.height);
   l.globalCompositeOperation='destination-out';
   const px=player.x-cam.x,py=player.y-cam.y;
   const rad=player.torchOn?230:120;
@@ -1573,10 +1579,22 @@ function drawDarkness(){
     l.fillStyle=g2;l.beginPath();l.arc(fx,fy,fr,0,7);l.fill();
   }
   cx.drawImage(lc,0,0);
+  
+  // Lumières colorées
+  cx.globalCompositeOperation='lighter';
   if(player.torchOn){
-    cx.fillStyle='rgba(242,160,60,.06)';
-    cx.beginPath();cx.arc(player.x-cam.x,player.y-cam.y,200,0,7);cx.fill();
+    const gl=cx.createRadialGradient(px,py,20,px,py,200);
+    gl.addColorStop(0,'rgba(255,160,50,0.15)');gl.addColorStop(1,'rgba(255,160,50,0)');
+    cx.fillStyle=gl;cx.beginPath();cx.arc(px,py,200,0,7);cx.fill();
   }
+  for(const f of fires){
+    const fx=f.x-cam.x,fy=f.y-cam.y;
+    const fr=160+Math.sin(performance.now()/120)*8;
+    const g2=cx.createRadialGradient(fx,fy,20,fx,fy,fr);
+    g2.addColorStop(0,'rgba(255,120,30,0.2)');g2.addColorStop(1,'rgba(255,120,30,0)');
+    cx.fillStyle=g2;cx.beginPath();cx.arc(fx,fy,fr,0,7);cx.fill();
+  }
+  cx.globalCompositeOperation='source-over';
 }
 
 function drawObjectiveArrow(){
