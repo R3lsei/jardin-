@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v12 — Aventure de survie</title>
+<title>MICRO-JARDIN v13 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1628,8 +1628,18 @@ function _doHostConnect(statusEl, errLog) {
   }, 8000);
 
   const roomCodeAttempt = generateRoomCode();
+  const customConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ]
+  };
+
   try {
-    peer = new Peer(roomCodeAttempt);
+    peer = new Peer(roomCodeAttempt, { config: customConfig });
   } catch (e) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
@@ -1761,8 +1771,18 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
     }
   }, 8000);
 
+  const customConfig = {
+    iceServers: [
+      { urls: 'stun:stun.l.google.com:19302' },
+      { urls: 'stun:stun1.l.google.com:19302' },
+      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
+      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+    ]
+  };
+
   try {
-    peer = new Peer();
+    peer = new Peer({ config: customConfig });
   } catch (e) {
     clearTimeout(connectionTimeout);
     clearInterval(countdownInterval);
