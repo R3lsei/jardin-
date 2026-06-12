@@ -6,7 +6,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>MICRO-JARDIN v14 — Aventure de survie</title>
+<title>MICRO-JARDIN v15 — Aventure de survie</title>
 <script src="./peerjs.min.js"></script>
 <style>
   :root{
@@ -1631,10 +1631,7 @@ function _doHostConnect(statusEl, errLog) {
   const customConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+      { urls: 'stun:stun1.l.google.com:19302' }
     ]
   };
 
@@ -1772,10 +1769,7 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
   const customConfig = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' },
-      { urls: 'turn:openrelay.metered.ca:80', username: 'openrelayproject', credential: 'openrelayproject' },
-      { urls: 'turn:openrelay.metered.ca:443', username: 'openrelayproject', credential: 'openrelayproject' },
-      { urls: 'turn:openrelay.metered.ca:443?transport=tcp', username: 'openrelayproject', credential: 'openrelayproject' }
+      { urls: 'stun:stun1.l.google.com:19302' }
     ]
   };
 
@@ -1797,9 +1791,9 @@ function _doJoinConnect(statusEl, errLog, targetCode) {
     conn = peer.connect(targetCode, { reliable: true });
     
     const p2pTimeout = setTimeout(() => {
-      statusEl.innerHTML = '❌ Impossible de se connecter à l\'hôte (Firewall/NAT).<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
+      statusEl.innerHTML = '❌ Impossible de se connecter à l\'hôte (Firewall/NAT très strict). Essayez de vous mettre sur le même réseau WiFi.<br><button class="bigbtn" style="font-size:10px;padding:6px 16px;margin-top:8px;box-shadow:none;border-radius:6px;" onclick="joinGame()">🔄 Réessayer</button>';
       try { conn.close(); } catch(e){}
-    }, 10000);
+    }, 25000);
 
     conn.on('open', () => {
       clearTimeout(p2pTimeout);
