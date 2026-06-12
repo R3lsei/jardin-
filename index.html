@@ -797,109 +797,121 @@ function generateProceduralTexture(type) {
   const ctx = canvas.getContext('2d');
   
   if (type === 'grass') {
-    // AoE II style Grass (Warm, rich olive green)
-    ctx.fillStyle = '#486e34';
+    // Minecraft Plains style Grass (Bright, vibrant green)
+    ctx.fillStyle = '#5b9c31';
     ctx.fillRect(0, 0, size, size);
-    
-    // Draw subtle organic patches and grass blades
-    ctx.fillStyle = '#5c8744';
-    for (let i = 0; i < 60; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 2, 2);
-      ctx.fillRect(x + 1, y - 1, 1, 3);
+    ctx.fillStyle = '#6fb342';
+    for (let i = 0; i < 70; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 2);
     }
-    ctx.fillStyle = '#345224';
+    ctx.fillStyle = '#4c8227';
     for (let i = 0; i < 40; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 2, 1);
-    }
-    ctx.fillStyle = '#6f9b53';
-    for (let i = 0; i < 30; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 1, 2);
-    }
-  } else if (type === 'sand') {
-    // AoE II style Sand (Warm beach sand)
-    ctx.fillStyle = '#d7be91';
-    ctx.fillRect(0, 0, size, size);
-    
-    // Draw subtle sand waves
-    ctx.strokeStyle = '#bc9f6e';
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 8; i++) {
-      ctx.beginPath();
-      const y = Math.random() * size;
-      ctx.moveTo(0, y);
-      ctx.bezierCurveTo(size/3, y + (Math.random()-0.5)*8, size*2/3, y + (Math.random()-0.5)*8, size, y);
-      ctx.stroke();
-    }
-    // Sand grains
-    ctx.fillStyle = '#e3cfad';
-    for (let i = 0; i < 100; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 1, 1);
-    }
-  } else if (type === 'water') {
-    // AoE II style Water (Deep marine blue-green)
-    ctx.fillStyle = '#1a4054';
-    ctx.fillRect(0, 0, size, size);
-    
-    // Wave ripples
-    ctx.strokeStyle = '#2f657a';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 8; i++) {
-      ctx.beginPath();
-      const y = Math.random() * size;
-      ctx.moveTo(0, y);
-      ctx.quadraticCurveTo(size/2, y + (Math.random()-0.5)*6, size, y);
-      ctx.stroke();
-    }
-    // Deep currents
-    ctx.fillStyle = '#133242';
-    for (let i = 0; i < 15; i++) {
-      ctx.fillRect(Math.random() * size, Math.random() * size, 12, 3);
-    }
-    // Light reflections
-    ctx.fillStyle = '#377793';
-    for (let i = 0; i < 20; i++) {
       ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
     }
-  } else if (type === 'darkgrass') {
-    // AoE II style forest floor/swamp (Deep dark green)
-    ctx.fillStyle = '#223c16';
+  } else if (type === 'sand') {
+    // Minecraft Desert style Sand (Warm yellow sand)
+    ctx.fillStyle = '#dbce97';
     ctx.fillRect(0, 0, size, size);
-    
-    // Mossy patches
-    ctx.fillStyle = '#2f4f22';
-    for (let i = 0; i < 70; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 3, 3);
+    ctx.fillStyle = '#ebdfa9';
+    for (let i = 0; i < 80; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
     }
-    // Shadows
-    ctx.fillStyle = '#14270d';
+    ctx.fillStyle = '#c7bc83';
+    for (let i = 0; i < 50; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 1, 1);
+    }
+  } else if (type === 'water') {
+    // Minecraft Ocean/River Water (Vibrant sky-blue)
+    ctx.fillStyle = '#3f76e4';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#578bf2';
+    ctx.lineWidth = 1.2;
+    for (let i = 0; i < 8; i++) {
+      ctx.beginPath();
+      const y = Math.random() * size;
+      ctx.moveTo(0, y);
+      ctx.quadraticCurveTo(size/2, y + (Math.random()-0.5)*4, size, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#2c5ec6';
+    for (let i = 0; i < 15; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 8, 2);
+    }
+  } else if (type === 'swampwater') {
+    // Minecraft Swamp Water (Murky swamp olive green-teal)
+    ctx.fillStyle = '#273f32';
+    ctx.fillRect(0, 0, size, size);
+    ctx.strokeStyle = '#1e3025';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 6; i++) {
+      ctx.beginPath();
+      const y = Math.random() * size;
+      ctx.moveTo(0, y);
+      ctx.quadraticCurveTo(size/2, y + (Math.random()-0.5)*4, size, y);
+      ctx.stroke();
+    }
+    ctx.fillStyle = '#345443';
+    for (let i = 0; i < 15; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 8, 2);
+    }
+  } else if (type === 'darkgrass') {
+    // Minecraft Spruce forest/Taiga pine green
+    ctx.fillStyle = '#2f5738';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#3e6e48';
+    for (let i = 0; i < 70; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 3, 3);
+    }
+    ctx.fillStyle = '#224028';
     for (let i = 0; i < 60; i++) {
       ctx.fillRect(Math.random() * size, Math.random() * size, 2, 2);
     }
   } else if (type === 'drygrass') {
-    // AoE II style dry steppe (Golden wheat colors)
-    ctx.fillStyle = '#9d8650';
+    // Minecraft Savanna style dry yellow-green
+    ctx.fillStyle = '#889c58';
     ctx.fillRect(0, 0, size, size);
-    
-    // Straw tufts
-    ctx.fillStyle = '#b39d67';
+    ctx.fillStyle = '#9fb56b';
     for (let i = 0; i < 80; i++) {
-      const x = Math.random() * size;
-      const y = Math.random() * size;
-      ctx.fillRect(x, y, 1, 3);
-      ctx.fillRect(x + 1, y + 1, 1, 2);
+      ctx.fillRect(Math.random() * size, Math.random() * size, 1, 3);
     }
-    ctx.fillStyle = '#836e3b';
+    ctx.fillStyle = '#708244';
     for (let i = 0; i < 50; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
+    }
+  } else if (type === 'dirt') {
+    // Minecraft Coarse Dirt (Rich brown with pebbles)
+    ctx.fillStyle = '#5c4028';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#4a3320';
+    for (let i = 0; i < 80; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+    }
+    ctx.fillStyle = '#7a5c3d';
+    for (let i = 0; i < 40; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
+    }
+  } else if (type === 'mud') {
+    // Minecraft Swamp Mud (Dark brown-black with mossy green)
+    ctx.fillStyle = '#2c1e14';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#1e140d';
+    for (let i = 0; i < 80; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 3, 2);
+    }
+    ctx.fillStyle = '#3c4f2b';
+    for (let i = 0; i < 40; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 2, 2);
+    }
+  } else if (type === 'stone') {
+    // Minecraft Stone (Grey with cobble texture details)
+    ctx.fillStyle = '#737373';
+    ctx.fillRect(0, 0, size, size);
+    ctx.fillStyle = '#5c5c5c';
+    for (let i = 0; i < 60; i++) {
+      ctx.fillRect(Math.random() * size, Math.random() * size, 3, 2);
+    }
+    ctx.fillStyle = '#8c8c8c';
+    for (let i = 0; i < 40; i++) {
       ctx.fillRect(Math.random() * size, Math.random() * size, 2, 1);
     }
   }
@@ -918,7 +930,7 @@ function generateProceduralTexture(type) {
 
 function initAssets(callback) {
   // Generate procedural textures for terrain biomes
-  const biomeTypes = ['grass','sand','water','darkgrass','drygrass'];
+  const biomeTypes = ['grass','sand','water','darkgrass','drygrass','swampwater','dirt','mud','stone'];
   for (const t of biomeTypes) {
     const tex = generateProceduralTexture(t);
     ASSETS[t] = tex;
@@ -928,13 +940,14 @@ function initAssets(callback) {
   // Map numeric tile indices to patterns
   patterns[0] = cx.createPattern(sprites.grass, 'repeat');
   patterns[1] = patterns[0];
-  patterns[2] = cx.createPattern(sprites.sand, 'repeat');
+  patterns[2] = cx.createPattern(sprites.dirt, 'repeat');
   patterns[3] = cx.createPattern(sprites.water, 'repeat');
-  patterns[4] = patterns[3];
-  patterns[5] = patterns[2];
+  patterns[4] = cx.createPattern(sprites.stone, 'repeat');
+  patterns[5] = cx.createPattern(sprites.sand, 'repeat');
   patterns[6] = cx.createPattern(sprites.darkgrass, 'repeat');
-  patterns[7] = patterns[2]; // Mud fallback to sand
+  patterns[7] = cx.createPattern(sprites.mud, 'repeat');
   patterns[8] = cx.createPattern(sprites.drygrass, 'repeat');
+  patterns['swampwater'] = cx.createPattern(sprites.swampwater, 'repeat');
 
   // Load sprite images (player, spider, boss, tree)
   const spriteList = ['player','spider','boss','tree'];
@@ -998,6 +1011,10 @@ function renderChunk(cx, cy) {
       const t=map[ty*MW+tx];
       if(patterns[t]){
         ctx.fillStyle = patterns[t];
+        // Dynamic water coloring: if tile is water (t === 3) and in Swamp biome (biomeMap === 2), draw swamp water
+        if (t === 3 && biomeMap[ty * MW + tx] === 2) {
+          ctx.fillStyle = patterns['swampwater'] || patterns[3];
+        }
         ctx.fillRect(tx*TS, ty*TS, TS+1.5, TS+1.5);
       } else {
         ctx.fillStyle='#000';
@@ -1109,7 +1126,7 @@ function renderChunk(cx, cy) {
     }
   }
 
-  // 3. Ground Details & Life (Deterministic and themed for Miniature scaling)
+  // 3. Ground Details & Life (Deterministic and themed for Minecraft / Miniature scaling)
   function drawTileDecorations(ctx, t, tx, ty) {
     const n1 = tileNoise(tx, ty, 10);
     const n2 = tileNoise(tx, ty, 20);
@@ -1117,127 +1134,149 @@ function renderChunk(cx, cy) {
     // Draw relative to chunk canvas coordinates
     const cx = tx * TS + TS / 2;
     const cy = ty * TS + TS / 2;
+    const biome = biomeMap[ty * MW + tx];
     
-    if (t === 0 || t === 1) { // Grass
-      // Grass blades
-      if (n1 < 0.28) {
-        ctx.strokeStyle = '#345224';
+    if (t === 0 || t === 1) { // Grass (Plains)
+      // Tall grass tufts
+      if (n1 < 0.22) {
+        ctx.strokeStyle = '#4c8227';
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(cx - 3, cy + 4);
-        ctx.quadraticCurveTo(cx - 5, cy - 4, cx - 7, cy - 2);
-        ctx.moveTo(cx, cy + 5);
-        ctx.quadraticCurveTo(cx - 1, cy - 7, cx - 2, cy - 6);
-        ctx.moveTo(cx + 3, cy + 4);
-        ctx.quadraticCurveTo(cx + 4, cy - 3, cx + 6, cy - 1);
+        ctx.moveTo(cx - 3, cy + 5);
+        ctx.lineTo(cx - 5, cy - 3);
+        ctx.moveTo(cx, cy + 6);
+        ctx.lineTo(cx, cy - 5);
+        ctx.moveTo(cx + 3, cy + 5);
+        ctx.lineTo(cx + 4, cy - 2);
         ctx.stroke();
       }
       
-      // Giant petals / flowers (since player is 4mm, these are visible details)
-      if (n2 < 0.06) {
-        const colors = ['#f5e050', '#ffffff', '#e26b6b']; // Yellow, white, red clovers
-        const petalCol = colors[Math.floor(n1 * colors.length)];
-        
-        ctx.fillStyle = petalCol;
-        const petalSize = 2;
-        ctx.beginPath();
-        ctx.arc(cx - 2, cy, petalSize, 0, 7);
-        ctx.arc(cx + 2, cy, petalSize, 0, 7);
-        ctx.arc(cx, cy - 2, petalSize, 0, 7);
-        ctx.arc(cx, cy + 2, petalSize, 0, 7);
-        ctx.fill();
-        
-        ctx.fillStyle = '#d89020';
-        ctx.beginPath();
-        ctx.arc(cx, cy, 1.5, 0, 7);
-        ctx.fill();
+      // Minecraft-style Flowers (Poppy, Dandelion, Cornflower, Daisy)
+      if (n2 < 0.07) {
+        const flowerType = Math.floor(n1 * 4);
+        if (flowerType === 0) {
+          // Red Poppy
+          ctx.fillStyle = '#d8453c';
+          ctx.fillRect(cx - 2, cy - 2, 4, 4);
+          ctx.fillStyle = '#1e140d';
+          ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
+        } else if (flowerType === 1) {
+          // Yellow Dandelion
+          ctx.fillStyle = '#f2b441';
+          ctx.beginPath();
+          ctx.arc(cx, cy, 2, 0, 7);
+          ctx.fill();
+        } else if (flowerType === 2) {
+          // Blue Cornflower
+          ctx.fillStyle = '#3f76e4';
+          ctx.fillRect(cx - 1.5, cy - 3, 3, 3);
+          ctx.fillStyle = '#578bf2';
+          ctx.fillRect(cx - 0.5, cy - 1, 1, 3);
+        } else {
+          // White Daisy
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(cx - 2, cy - 1, 4, 2);
+          ctx.fillRect(cx - 1, cy - 2, 2, 4);
+          ctx.fillStyle = '#f2b441';
+          ctx.fillRect(cx - 0.5, cy - 0.5, 1, 1);
+        }
       }
-    } else if (t === 2 || t === 5 || t === 7) { // Sand / Mud
-      // Small pebbles / large sand grains
+    } else if (t === 2) { // Dirt (Minecraft Coarse Dirt)
+      // Small stones / coarse dirt spots
       if (n1 < 0.15) {
-        ctx.fillStyle = t === 7 ? '#3a2512' : '#a89470';
-        ctx.beginPath();
-        ctx.arc(cx + (n2 - 0.5) * 12, cy + (n1 - 0.5) * 12, 1.5 + n2 * 2, 0, 7);
-        ctx.fill();
-        
-        ctx.fillStyle = t === 7 ? '#50351a' : '#d2c2a4';
-        ctx.beginPath();
-        ctx.arc(cx + (n2 - 0.5) * 12 - 0.5, cy + (n1 - 0.5) * 12 - 0.5, 0.8, 0, 7);
-        ctx.fill();
+        ctx.fillStyle = '#7a5c3d';
+        ctx.fillRect(cx + (n2 - 0.5) * 10, cy + (n1 - 0.5) * 10, 2, 2);
       }
-      // Dry twig / leaf fragment on mud
-      if (t === 7 && n2 < 0.08) {
-        ctx.strokeStyle = '#5c4018';
-        ctx.lineWidth = 1.2;
-        ctx.beginPath();
-        ctx.moveTo(cx - 6, cy - 4);
-        ctx.lineTo(cx + 6, cy + 4);
-        ctx.stroke();
+    } else if (t === 5 || t === 7) { // Sand / Mud (Swamp)
+      if (t === 7) { // Swamp Mud
+        // Blue Orchid (Minecraft swamp flower)
+        if (n1 < 0.05) {
+          ctx.fillStyle = '#2f8bf2'; // Vibrant light blue
+          ctx.fillRect(cx - 2, cy - 3, 4, 2);
+          ctx.fillRect(cx - 1, cy - 5, 2, 4);
+          ctx.fillStyle = '#c5dfff';
+          ctx.fillRect(cx - 0.5, cy - 2, 1, 1);
+        }
+        // Moss patch
+        else if (n2 < 0.12) {
+          ctx.fillStyle = '#4c6b30';
+          ctx.beginPath();
+          ctx.ellipse(cx, cy, 3 + n1 * 4, 2 + n2 * 2, 0.5, 0, 7);
+          ctx.fill();
+        }
+      } else { // Sand
+        // Small orange-brown shell fragments / pebbles
+        if (n1 < 0.10) {
+          ctx.fillStyle = '#bfa373';
+          ctx.fillRect(cx + (n2 - 0.5) * 12, cy + (n1 - 0.5) * 12, 2, 1.5);
+        }
       }
     } else if (t === 3 || t === 4) { // Water
-      // Water lily pad
-      if (n1 < 0.05) {
-        ctx.fillStyle = '#2d5e35';
+      // Lily pads in swamp water (biome === 2)
+      if (biome === 2 && n1 < 0.07) {
+        ctx.fillStyle = '#2e5b3c';
         ctx.beginPath();
-        ctx.arc(cx, cy, 3 + n2 * 3, 0.2, 5.9);
+        ctx.arc(cx, cy, 4 + n2 * 3, 0.3, 5.8);
         ctx.lineTo(cx, cy);
         ctx.fill();
         
-        if (n2 < 0.4) {
-          ctx.fillStyle = '#ff8ab0';
+        // Small pink lotus flower
+        if (n2 < 0.3) {
+          ctx.fillStyle = '#ff9ebe';
           ctx.beginPath();
           ctx.arc(cx, cy, 1.5, 0, 7);
           ctx.fill();
         }
       }
-    } else if (t === 6) { // Dark Grass (Forest floor)
-      // Fallen twigs
-      if (n1 < 0.16) {
-        ctx.strokeStyle = '#4e331b';
-        ctx.lineWidth = 1;
+    } else if (t === 6) { // Dark Grass (Forest / Taiga)
+      // Sweet Berry Bush
+      if (n1 < 0.08) {
+        ctx.fillStyle = '#224d2c'; // Dark green leaves
         ctx.beginPath();
-        ctx.moveTo(cx - 8, cy + (n2 - 0.5) * 8);
-        ctx.lineTo(cx + 8, cy - (n2 - 0.5) * 8);
-        ctx.stroke();
+        ctx.arc(cx, cy, 4, 0, 7);
+        ctx.arc(cx - 2, cy + 2, 3, 0, 7);
+        ctx.arc(cx + 2, cy + 1, 3.5, 0, 7);
+        ctx.fill();
+        // Red berries
+        ctx.fillStyle = '#d8453c';
+        ctx.fillRect(cx - 2, cy - 1, 1.5, 1.5);
+        ctx.fillRect(cx + 1, cy + 1, 1.5, 1.5);
       }
-      
-      // Giant mushrooms (red and white)
-      if (n2 < 0.04) {
-        const mx = cx + (n1 - 0.5) * 6;
-        const my = cy + (n2 - 0.5) * 6;
+      // Red and Brown Mushrooms
+      else if (n2 < 0.05) {
+        const isRed = n1 < 0.5;
+        const mx = cx + (n1 - 0.5) * 8;
+        const my = cy + (n2 - 0.5) * 8;
         
-        ctx.fillStyle = '#e5dec9';
-        ctx.fillRect(mx - 1.5, my, 3, 5);
+        // Stem
+        ctx.fillStyle = '#e8e2cf';
+        ctx.fillRect(mx - 1, my, 2, 4);
         
-        ctx.fillStyle = '#ba2b2b';
+        // Cap
+        ctx.fillStyle = isRed ? '#ba2b2b' : '#8c5a3c';
         ctx.beginPath();
-        ctx.arc(mx, my, 4, Math.PI, 0);
+        ctx.arc(mx, my, 3.5, Math.PI, 0);
         ctx.fill();
         
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(mx - 1.5, my - 3, 1, 1);
-        ctx.fillRect(mx + 1, my - 2, 1, 1);
+        // White dots for red mushroom
+        if (isRed) {
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(mx - 1, my - 2, 0.8, 0.8);
+          ctx.fillRect(mx + 1, my - 1, 0.8, 0.8);
+        }
       }
-      
-      // Pine needle
-      if (n1 > 0.85) {
-        ctx.strokeStyle = '#5a7c2b';
+    } else if (t === 8) { // Dry Grass (Savanna)
+      // Minecraft Dead Bush
+      if (n1 < 0.18) {
+        ctx.strokeStyle = '#7c603a'; // Dry grey-brown sticks
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(cx - 5, cy - 2);
-        ctx.quadraticCurveTo(cx, cy + 2, cx + 5, cy - 1);
-        ctx.stroke();
-      }
-    } else if (t === 8) { // Dry Grass
-      // Dry twigs / straw clusters
-      if (n1 < 0.20) {
-        ctx.strokeStyle = '#735f34';
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(cx - 4, cy + 3);
-        ctx.lineTo(cx + 4, cy - 3);
-        ctx.moveTo(cx - 2, cy - 4);
-        ctx.lineTo(cx + 3, cy + 4);
+        ctx.moveTo(cx - 4, cy + 5);
+        ctx.lineTo(cx + 3, cy - 4);
+        ctx.moveTo(cx + 4, cy + 5);
+        ctx.lineTo(cx - 3, cy - 3);
+        ctx.moveTo(cx, cy + 6);
+        ctx.lineTo(cx - 1, cy - 5);
         ctx.stroke();
       }
     }
@@ -2099,7 +2138,12 @@ function drawMinimapBase(){
   const m=mmBase.getContext('2d');
   for(let y=0;y<MH;y++)for(let x=0;x<MW;x++){
     const t=map[y*MW+x];
-    m.fillStyle=['#2c5a2a','#1f421e','#5a3d24','#3a7ca8','#6e6e6e','#b89a55','#16321a','#3a4226'][t];
+    const b=biomeMap[y*MW+x];
+    let col = ['#5b9c31','#4c8227','#5c4028','#3f76e4','#737373','#dbce97','#2f5738','#2c1e14','#889c58'][t] || '#fff';
+    if (t === 3 && b === 2) {
+      col = '#273f32'; // Swamp water color on minimap
+    }
+    m.fillStyle = col;
     m.fillRect(x/MW*150,y/MH*150,150/MW+1,150/MH+1);
   }
 }
