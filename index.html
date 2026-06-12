@@ -173,12 +173,26 @@
 
   <div id="multiplayerMenu" style="display:none; flex-direction:column; gap:12px; margin-top:20px; width:100%; max-width:400px; background:rgba(0,0,0,0.5); padding:16px; border-radius:12px; border:1px solid var(--panel-line); align-items:center;">
     <h3 style="color:var(--amber); letter-spacing:2px; font-size:14px; text-transform:uppercase; margin-bottom:4px;">Configuration Multijoueur (v3)</h3>
-    <input type="text" id="nicknameInput" placeholder="Votre Pseudo" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center;" value="Joueur">
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%;">
-      <button class="bigbtn" style="font-size:12px; padding:12px; width:100%; box-shadow:none; border-radius:8px; text-shadow:none;" onclick="hostGame()">Créer Partie</button>
-      <button class="bigbtn" style="font-size:12px; padding:12px; width:100%; box-shadow:none; border-radius:8px; background:#5aa8d8; color:#0b253a; text-shadow:none;" onclick="joinGame()">Rejoindre</button>
+    
+    <div style="width:100%; text-align:left;">
+      <label style="font-size:11px; color:var(--amber); font-weight:bold; text-transform:uppercase;">1. Votre Pseudo :</label>
+      <input type="text" id="nicknameInput" placeholder="Votre Pseudo" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center; margin-top:4px;" value="Joueur">
     </div>
-    <input type="text" id="roomCodeInput" placeholder="Code de la partie (ex: m-j-1234)" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:14px; width:100%; outline:none; text-align:center;">
+
+    <hr style="border:0; border-top:1px solid rgba(255,255,255,0.1); width:100%; margin:4px 0;">
+
+    <div style="width:100%; text-align:left;">
+      <label style="font-size:11px; color:var(--amber); font-weight:bold; text-transform:uppercase;">2. Action :</label>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; width:100%; margin-top:4px;">
+        <button class="bigbtn" style="font-size:11px; padding:10px; width:100%; box-shadow:none; border-radius:8px; text-shadow:none; line-height: 1.3;" onclick="hostGame()">Créer Partie<br><span style="font-size:8px; opacity:0.8; font-weight:normal; text-transform:none;">(Code Auto)</span></button>
+        <button class="bigbtn" style="font-size:11px; padding:10px; width:100%; box-shadow:none; border-radius:8px; background:#5aa8d8; color:#0b253a; text-shadow:none; line-height: 1.3;" onclick="joinGame()">Rejoindre<br><span style="font-size:8px; opacity:0.8; font-weight:normal; text-transform:none;">(Code requis)</span></button>
+      </div>
+    </div>
+
+    <div style="width:100%; text-align:left;">
+      <input type="text" id="roomCodeInput" placeholder="Coller le code de l'hôte ici pour rejoindre" style="background:#0a1a0c; border:1px solid var(--panel-line); color:var(--bone); padding:8px 12px; border-radius:6px; font-size:12px; width:100%; outline:none; text-align:center;">
+    </div>
+
     <div id="connectionStatus" style="font-size:12px; color:var(--amber); font-weight:bold; min-height:18px; height:auto; text-align:center; word-break:break-word; max-width:100%; margin-top:4px;"></div>
     <div id="connectionErrorLog" style="font-size:10px; color:#ff6b6b; font-family:monospace; margin-top:8px; display:none; background:rgba(0,0,0,0.7); padding:8px; border-radius:6px; width:100%; max-height:120px; overflow-y:auto; word-break:break-all; text-align:left; border:1px solid rgba(255,107,107,0.3); white-space:pre-wrap;"></div>
     <button class="bigbtn" style="font-size:11px; padding:6px 14px; background:#e0584e; color:white; border-radius:6px; box-shadow:none; text-transform:none; font-weight:normal; text-shadow:none;" onclick="hideMultiplayerMenu()">Retour</button>
@@ -1592,6 +1606,15 @@ function hostGame() {
     document.getElementById('roomCodeVal').textContent = id;
     
     startGame();
+
+    // Copy the code to clipboard automatically and display messages on HUD
+    msg('🔑 Partie Créée ! Partagez le code en haut à droite.', 'good');
+    msg(`Code : ${id}`, 'good');
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(id).then(() => {
+        msg('📋 Code copié automatiquement dans le presse-papiers !', 'good');
+      }).catch(() => {});
+    }
   });
   
   peer.on('connection', (c) => {
