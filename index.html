@@ -84,13 +84,14 @@
   #chestPanel .hint{font-size:11px;opacity:.6;margin-top:10px;text-align:center}
 
   /* ---------- Écrans ---------- */
-  .screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 30%,#1d3a1d 0%,#0a1a0c 70%);text-align:center;padding:20px}
-  .screen h1{font-size:clamp(38px,8vw,72px);letter-spacing:8px;color:var(--amber);text-shadow:0 4px 0 var(--amber-dark),0 8px 30px rgba(0,0,0,.6);margin-bottom:6px;font-weight:900}
+  .screen{position:fixed;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;background:radial-gradient(ellipse at 50% 30%,#1d3a1d 0%,#0a1a0c 70%);text-align:center;padding:20px;overflow-y:auto}
+  .screen h1{font-size:clamp(38px,8vw,72px);letter-spacing:8px;color:var(--amber);text-shadow:0 4px 0 var(--amber-dark),0 8px 30px rgba(0,0,0,.6);margin-bottom:6px;font-weight:900;margin-top:auto}
   .screen .sub{font-size:15px;letter-spacing:4px;text-transform:uppercase;opacity:.7;margin-bottom:30px}
   .screen p{max-width:560px;line-height:1.7;font-size:15px;opacity:.9;margin-bottom:26px}
   .bigbtn{pointer-events:auto;background:var(--amber);color:#1a1206;border:none;font-size:17px;font-weight:800;letter-spacing:2px;padding:15px 46px;border-radius:40px;cursor:pointer;text-transform:uppercase;box-shadow:0 5px 0 var(--amber-dark),0 10px 24px rgba(0,0,0,.5);transition:transform .12s}
   .bigbtn:hover{transform:translateY(-3px)}
   .bigbtn:active{transform:translateY(2px);box-shadow:0 2px 0 var(--amber-dark)}
+  .screen #menuButtons, .screen #multiplayerMenu, .screen .bigbtn, .screen .statsRecap{margin-bottom:auto}
   .ctrlGrid{display:grid;grid-template-columns:auto auto;gap:5px 22px;font-size:12.5px;text-align:left;margin-bottom:26px;background:rgba(0,0,0,.35);padding:14px 24px;border-radius:12px;border:1px solid var(--panel-line)}
   .ctrlGrid b{color:var(--amber)}
   #deathScreen,#winScreen{display:none}
