@@ -315,7 +315,7 @@ const BIOME_NAMES=['Prairie','Forêt de Tiges','Marais des Mousses','Clairière 
 const tileAt=(tx,ty)=> (tx<0||ty<0||tx>=MW||ty>=MH)?4:map[ty*MW+tx];
 const solidTile=t=> t===3||t===4;
 
-const SPAWN   = {x:24*TS, y:104*TS};
+const SPAWN   = {x:120*TS, y:30*TS};
 const MACHINE = {x:16*TS, y:14*TS};
 const BOSS_LAIR={x:112*TS, y:112*TS};
 const LAKES=[{x:96,y:30,r:11},{x:34,y:46,r:8},{x:70,y:78,r:9},{x:104,y:64,r:6},{x:48,y:14,r:7}];
@@ -2551,6 +2551,20 @@ function update(dt){
     if (dx || dy) {
       moveEntity(player, dx * spd * dt, dy * spd * dt);
       player.walkT = (player.walkT || 0) + dt * 8;
+      player.walkInt = Math.min(1, (player.walkInt || 0) + dt * 8);
+      if (Math.random() < 0.16) {
+        const pCol = onMud ? '#5a4632' : '#c2b59b';
+        particles.push({
+          x: player.x + R(-5, 5),
+          y: player.y + 6 + R(-2, 2),
+          vx: -dx * spd * 0.1 + R(-8, 8),
+          vy: -dy * spd * 0.1 - R(5, 15),
+          t: R(0.25, 0.45),
+          col: pCol
+        });
+      }
+    } else {
+      player.walkInt = Math.max(0, (player.walkInt || 0) - dt * 8);
     }
     player.atkCd = Math.max(0, player.atkCd - dt);
     player.iFrames = Math.max(0, player.iFrames - dt);
@@ -2645,6 +2659,20 @@ function update(dt){
   if(dx||dy){
     moveEntity(player,dx*spd*dt,dy*spd*dt);
     player.walkT=(player.walkT||0)+dt*8;
+    player.walkInt = Math.min(1, (player.walkInt || 0) + dt * 8);
+    if (Math.random() < 0.16) {
+      const pCol = onMud ? '#5a4632' : '#c2b59b';
+      particles.push({
+        x: player.x + R(-5, 5),
+        y: player.y + 6 + R(-2, 2),
+        vx: -dx * spd * 0.1 + R(-8, 8),
+        vy: -dy * spd * 0.1 - R(5, 15),
+        t: R(0.25, 0.45),
+        col: pCol
+      });
+    }
+  } else {
+    player.walkInt = Math.max(0, (player.walkInt || 0) - dt * 8);
   }
   player.atkCd=Math.max(0,player.atkCd-dt);
   player.iFrames=Math.max(0,player.iFrames-dt);
@@ -3051,6 +3079,11 @@ function render(){
     cx.restore();
   }
 
+  // Effets de shaders de journée et d'ambiance
+  drawCloudShadows();
+  drawDaylightOverlay();
+  drawVignette();
+
   drawObjectiveArrow();
   drawMinimapLive();
 }
@@ -3096,25 +3129,44 @@ function drawWallGhost(){
 
 function drawStruct(s,x,y){
   const half=TS/2;
+  const sh = getShadowOffset();
   if(s.type==='mur'){
     cx.fillStyle='#6e4a26';cx.fillRect(x-half,y-half,TS,TS);
     cx.fillStyle='#825a32';
     for(let i=0;i<3;i++)cx.fillRect(x-half+2,y-half+3+i*11,TS-4,8);
     cx.strokeStyle='#3a250f';cx.lineWidth=2;cx.strokeRect(x-half+1,y-half+1,TS-2,TS-2);
   }else if(s.type==='etabli'){
-    cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+12,18,6,0,0,7);cx.fill();
+    if (sh.alpha > 0) {
+      cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+      cx.beginPath(); cx.ellipse(x + sh.x, y + 12 + sh.y, 18, 6, 0, 0, 7); cx.fill();
+    } else {
+      cx.fillStyle = 'rgba(0,0,0,.25)';
+      cx.beginPath(); cx.ellipse(x, y + 12, 18, 6, 0, 0, 7); cx.fill();
+    }
     cx.fillStyle='#4a3018';cx.fillRect(x-15,y-2,5,14);cx.fillRect(x+10,y-2,5,14);
     cx.fillStyle='#8a5e34';cx.fillRect(x-18,y-8,36,8);
     cx.font='13px serif';cx.textAlign='center';cx.fillText('🛠️',x,y-12);
     if(dist(player,s)<170){cx.strokeStyle='rgba(242,180,65,.25)';cx.lineWidth=1.5;cx.setLineDash([5,5]);cx.beginPath();cx.arc(x,y,40,0,7);cx.stroke();cx.setLineDash([]);}
   }else if(s.type==='coffre'){
-    cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+11,15,5,0,0,7);cx.fill();
+    if (sh.alpha > 0) {
+      cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+      cx.beginPath(); cx.ellipse(x + sh.x, y + 11 + sh.y, 15, 5, 0, 0, 7); cx.fill();
+    } else {
+      cx.fillStyle = 'rgba(0,0,0,.25)';
+      cx.beginPath(); cx.ellipse(x, y + 11, 15, 5, 0, 0, 7); cx.fill();
+    }
     cx.fillStyle='#7a5230';cx.fillRect(x-13,y-6,26,16);
     cx.fillStyle='#5a3a1e';cx.fillRect(x-13,y-10,26,7);
     cx.fillStyle='#f2b441';cx.fillRect(x-2.5,y-4,5,6);
     if(dist(player,s)<55){cx.fillStyle='#f2b441';cx.font='bold 10px sans-serif';cx.textAlign='center';cx.fillText('[E] Ouvrir',x,y-18);}
   }else if(s.type==='lit'){
-    cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+12,17,5,0,0,7);cx.fill();
+    if (sh.alpha > 0) {
+      cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+      cx.beginPath(); cx.ellipse(x + sh.x, y + 12 + sh.y, 17, 5, 0, 0, 7); cx.fill();
+    } else {
+      cx.fillStyle = 'rgba(0,0,0,.25)';
+      cx.beginPath(); cx.ellipse(x, y + 12, 17, 5, 0, 0, 7); cx.fill();
+    }
     cx.fillStyle='#5a8a3a';cx.fillRect(x-15,y-8,30,18);          // mousse
     cx.fillStyle='#7ab055';cx.fillRect(x-15,y-8,30,6);
     cx.fillStyle='#cdebb0';cx.beginPath();cx.ellipse(x-8,y-4,5,3.5,0,0,7);cx.fill(); // oreiller
@@ -3123,7 +3175,13 @@ function drawStruct(s,x,y){
       cx.fillText(isNight()?'[E] Dormir':'🛏 Point de réapparition',x,y-16);
     }
   }else if(s.type==='tente'){
-    cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+12,20,6,0,0,7);cx.fill();
+    if (sh.alpha > 0) {
+      cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+      cx.beginPath(); cx.ellipse(x + sh.x, y + 12 + sh.y, 20, 6, 0, 0, 7); cx.fill();
+    } else {
+      cx.fillStyle = 'rgba(0,0,0,.25)';
+      cx.beginPath(); cx.ellipse(x, y + 12, 20, 6, 0, 0, 7); cx.fill();
+    }
     cx.fillStyle='#bf9150';
     cx.beginPath();
     cx.moveTo(x-18, y+10);
@@ -3159,7 +3217,18 @@ function drawTree(t,x,y){
   const s=t.size;
   const sw=(t.shake?Math.sin(performance.now()/25)*3:0)+Math.sin(performance.now()/900+t.sway)*1.5;
   // ombre
-  cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+6,16*s,7*s,0,0,7);cx.fill();
+  const sh = getShadowOffset();
+  if (sh.alpha > 0) {
+    cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+    cx.beginPath();
+    cx.ellipse(x + sh.x, y + 6 + sh.y, 16 * s, 7 * s, 0, 0, 7);
+    cx.fill();
+  } else {
+    cx.fillStyle = 'rgba(0,0,0,.25)';
+    cx.beginPath();
+    cx.ellipse(x, y + 6, 12 * s, 5 * s, 0, 0, 7);
+    cx.fill();
+  }
   // tronc
   cx.fillStyle=t.swamp?'#4a4232':'#5e3f22';
   cx.fillRect(x-5*s,y-26*s,10*s,30*s);
@@ -3324,7 +3393,18 @@ function drawResource(r,x,y){
 function drawEnemy(e,x,y){
   cx.save();cx.translate(x,y);
   // Ombre sous l'ennemi
-  cx.fillStyle='rgba(0,0,0,.4)';cx.beginPath();cx.ellipse(0,e.r*0.6,e.r*1.1,e.r*0.45,0,0,7);cx.fill();
+  const sh = getShadowOffset();
+  if (sh.alpha > 0) {
+    cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+    cx.beginPath();
+    cx.ellipse(sh.x, e.r * 0.6 + sh.y, e.r * 1.1, e.r * 0.45, 0, 0, 7);
+    cx.fill();
+  } else {
+    cx.fillStyle = 'rgba(0,0,0,.25)';
+    cx.beginPath();
+    cx.ellipse(0, e.r * 0.6, e.r * 1.1, e.r * 0.45, 0, 0, 7);
+    cx.fill();
+  }
   
   if(e.hitT>0){cx.filter='brightness(2)';}
   const t=performance.now()/200;
@@ -3377,9 +3457,39 @@ function drawPlayer(x,y){
   cx.save();cx.translate(x,y+bob);
   
   // Ombre
-  cx.fillStyle='rgba(0,0,0,.35)';cx.beginPath();cx.ellipse(0,5,13,5.5,0,0,7);cx.fill();
+  const sh = getShadowOffset();
+  if (sh.alpha > 0) {
+    cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+    cx.beginPath();
+    cx.ellipse(sh.x, 5 - bob + sh.y, 13, 5.5, 0, 0, 7);
+    cx.fill();
+  } else {
+    cx.fillStyle = 'rgba(0,0,0,.25)';
+    cx.beginPath();
+    cx.ellipse(0, 5 - bob, 11, 4.5, 0, 0, 7);
+    cx.fill();
+  }
   
   if(player.iFrames>0&&performance.now()%200<100){cx.restore();return;}
+  
+  // Application des animations de mouvement (Squash/Stretch & Tilt rotation autour des pieds)
+  const walkInt = player.walkInt || 0;
+  const squash = Math.sin(player.walkT || 0) * 0.05 * walkInt;
+  const scaleX = 1 + squash;
+  const scaleY = 1 - squash;
+  const tilt = Math.cos(player.walkT || 0) * 0.07 * walkInt;
+
+  cx.save();
+  // Pivot au niveau des pieds (y = 5 - bob)
+  cx.translate(0, 5 - bob);
+  cx.scale(scaleX, scaleY);
+  cx.rotate(tilt);
+  cx.translate(0, -(5 - bob));
+
+  // Orientation du sprite (flip horizontal si le joueur regarde à gauche)
+  if (Math.cos(player.facing) < 0) {
+    cx.scale(-1, 1);
+  }
   
   if (sprites.player) {
     cx.drawImage(sprites.player, -18, -30, 36, 36);
@@ -3389,6 +3499,7 @@ function drawPlayer(x,y){
   if(has('chapeau_fleur')) {
     cx.save(); cx.font='15px serif'; cx.textAlign='center'; cx.fillText('👒', 0, -27); cx.restore();
   }
+  cx.restore(); // Restaure les transformations du corps (les armes restent non déformées)
   
   const wIc=has('epee')?'⚔️':has('lance')?'🗡️':has('hache')?'🪓':null;
   if(wIc){
@@ -3456,6 +3567,87 @@ function drawFire(x,y,t,hp,maxhp){
     cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(x-14,y-22,28,3.5);
     cx.fillStyle='#f2b441';cx.fillRect(x-14,y-22,28*hp/maxhp,3.5);
   }
+}
+
+function getShadowOffset() {
+  if (isNight()) return { x: 0, y: 0, alpha: 0 };
+  const progress = timeOfDay / DAY_LEN;
+  const angle = Math.PI * (1 - progress);
+  const shadowAngle = angle + Math.PI;
+  const lengthFactor = Math.abs(progress - 0.5) * 2;
+  const length = 3 + lengthFactor * 10;
+  return {
+    x: Math.cos(shadowAngle) * length,
+    y: Math.sin(shadowAngle) * length * 0.4,
+    alpha: 0.14 + (1 - lengthFactor) * 0.1
+  };
+}
+
+function drawCloudShadows() {
+  if (isNight()) return;
+  cx.save();
+  cx.fillStyle = 'rgba(5, 10, 25, 0.05)';
+  const time = performance.now() * 0.00004;
+  const w = cv.width, h = cv.height;
+  for (let i = 0; i < 3; i++) {
+    const cx0 = ((time * 180 + i * w * 0.5) % (w + 400)) - 200;
+    const cy0 = (Math.sin(time * 2 + i) * 60 + h * (0.2 + i * 0.35));
+    cx.beginPath();
+    cx.ellipse(cx0, cy0, 140, 70, 0, 0, 7);
+    cx.ellipse(cx0 - 60, cy0 + 10, 100, 50, 0, 0, 7);
+    cx.ellipse(cx0 + 60, cy0 + 10, 100, 50, 0, 0, 7);
+    cx.ellipse(cx0, cy0 - 20, 110, 60, 0, 0, 7);
+    cx.fill();
+  }
+  cx.restore();
+}
+
+function drawVignette() {
+  cx.save();
+  const grad = cx.createRadialGradient(cv.width/2, cv.height/2, cv.width * 0.45, cv.width/2, cv.height/2, cv.width * 0.85);
+  grad.addColorStop(0, 'rgba(0,0,0,0)');
+  grad.addColorStop(1, 'rgba(0,0,0,0.48)');
+  cx.fillStyle = grad;
+  cx.fillRect(0, 0, cv.width, cv.height);
+  cx.restore();
+}
+
+function drawDaylightOverlay() {
+  const t = timeOfDay;
+  if (isNight()) return;
+
+  cx.save();
+  if (t >= 0 && t < 30) {
+    // Aube / Lever de soleil (0 -> 30)
+    const p = t / 30;
+    // Teinte rose/orangée douce sur le sol
+    cx.globalCompositeOperation = 'overlay';
+    cx.fillStyle = `rgba(255, 140, 80, ${0.16 * (1 - p)})`;
+    cx.fillRect(0, 0, cv.width, cv.height);
+    
+    // Léger éclat de lumière de midi qui commence à apparaître
+    cx.globalCompositeOperation = 'soft-light';
+    cx.fillStyle = `rgba(255, 235, 180, ${0.14 * p})`;
+    cx.fillRect(0, 0, cv.width, cv.height);
+  } else if (t >= 30 && t < 140) {
+    // Plein jour / Midi (30 -> 140)
+    cx.globalCompositeOperation = 'soft-light';
+    cx.fillStyle = 'rgba(255, 235, 180, 0.14)';
+    cx.fillRect(0, 0, cv.width, cv.height);
+  } else if (t >= 140 && t < 170) {
+    // Crépuscule / Coucher de soleil (140 -> 170)
+    const p = (t - 140) / 30;
+    // Lumière de midi qui s'estompe
+    cx.globalCompositeOperation = 'soft-light';
+    cx.fillStyle = `rgba(255, 235, 180, ${0.14 * (1 - p)})`;
+    cx.fillRect(0, 0, cv.width, cv.height);
+    
+    // Ambre/orange de fin de journée intense
+    cx.globalCompositeOperation = 'overlay';
+    cx.fillStyle = `rgba(255, 80, 0, ${0.24 * p})`;
+    cx.fillRect(0, 0, cv.width, cv.height);
+  }
+  cx.restore();
 }
 
 let sharedLightCanvas = null;
@@ -4307,7 +4499,48 @@ function drawRemotePlayer(rp, x, y) {
   cx.save(); cx.translate(x, y + bob);
   if (rp.iFrames > 0) cx.globalAlpha = 0.5 + Math.sin(performance.now() / 40) * 0.3;
   
-  cx.fillStyle = 'rgba(0,0,0,.3)'; cx.beginPath(); cx.ellipse(0, 12 - bob, 10, 4, 0, 0, 7); cx.fill();
+  // Ombre
+  const sh = getShadowOffset();
+  if (sh.alpha > 0) {
+    cx.fillStyle = `rgba(0,0,0,${sh.alpha})`;
+    cx.beginPath();
+    cx.ellipse(sh.x, 5 - bob + sh.y, 13, 5.5, 0, 0, 7);
+    cx.fill();
+  } else {
+    cx.fillStyle = 'rgba(0,0,0,.25)';
+    cx.beginPath();
+    cx.ellipse(0, 5 - bob, 11, 4.5, 0, 0, 7);
+    cx.fill();
+  }
+
+  // Calcul local de l'intensité de marche pour le joueur distant
+  const moved = Math.hypot(rp.x - (rp.lastX || rp.x), rp.y - (rp.lastY || rp.y)) > 0.1;
+  rp.lastX = rp.x;
+  rp.lastY = rp.y;
+  if (moved) {
+    rp.walkInt = Math.min(1, (rp.walkInt || 0) + 0.15);
+  } else {
+    rp.walkInt = Math.max(0, (rp.walkInt || 0) - 0.12);
+  }
+
+  // Application des animations de mouvement
+  const walkInt = rp.walkInt || 0;
+  const squash = Math.sin(rp.walkT || 0) * 0.05 * walkInt;
+  const scaleX = 1 + squash;
+  const scaleY = 1 - squash;
+  const tilt = Math.cos(rp.walkT || 0) * 0.07 * walkInt;
+
+  cx.save();
+  // Pivot au niveau des pieds (y = 5 - bob)
+  cx.translate(0, 5 - bob);
+  cx.scale(scaleX, scaleY);
+  cx.rotate(tilt);
+  cx.translate(0, -(5 - bob));
+
+  // Orientation du regard
+  if (Math.cos(rp.facing) < 0) {
+    cx.scale(-1, 1);
+  }
   
   if (sprites.player) {
     cx.drawImage(sprites.player, -18, -30, 36, 36);
@@ -4317,6 +4550,7 @@ function drawRemotePlayer(rp, x, y) {
   if (rp.chapeau) {
     cx.save(); cx.font='15px serif'; cx.textAlign='center'; cx.fillText('👒', 0, -27); cx.restore();
   }
+  cx.restore(); // Restaure les transformations du corps (le reste n'est pas déformé)
   
   const hasAxe = rp.inv && rp.inv.hache;
   const hasSword = rp.inv && rp.inv.epee;
