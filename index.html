@@ -1332,7 +1332,7 @@ function updateHotbar(){
   if(chestOpen)renderChest();
 }
 function useItem(it){
-  if(!has(it))return;
+  if(!creativeMode && !has(it))return;
   const def=ITEMS[it];
   let used = false;
   if(def.eat){
@@ -1359,7 +1359,7 @@ function useItem(it){
   }
   
   if (used) {
-    take(it);
+    if (!creativeMode) take(it);
     beep(520,.1,'sine');
   } else if(def.place) {
     tryPlace(it);
@@ -1814,7 +1814,7 @@ function initAssets(callback) {
   patterns['swampwater'] = cx.createPattern(sprites.swampwater, 'repeat');
 
   // Load sprite images (player, spider, boss, tree)
-  const spriteList = ['player','spider','boss','tree'];
+  const spriteList = ['player','spider','boss','tree','player_back','player_profile'];
   let loaded = 0;
   const total = spriteList.length;
   for (const s of spriteList) {
@@ -3350,16 +3350,67 @@ function drawResource(r,x,y){
       cx.strokeStyle='#b59c50';cx.lineWidth=2;
       for(let i=-1;i<=1;i++){cx.beginPath();cx.moveTo(x+i*4,y+6);cx.lineTo(x+i*3+w,y-10);cx.stroke();}
       break;
-    case 'buisson':
-      cx.fillStyle='#2e5c1e';cx.beginPath();cx.arc(x-4,y+2,7,0,7);cx.fill();
-      cx.beginPath();cx.arc(x+4,y+1,8,0,7);cx.fill();
-      cx.beginPath();cx.arc(x,y-4,9,0,7);cx.fill();
-      // baies rouges
-      cx.fillStyle='#e03b24';
-      cx.beginPath();cx.arc(x-3,y-2,2.5,0,7);cx.fill();
-      cx.beginPath();cx.arc(x+4,y-3,2.5,0,7);cx.fill();
-      cx.beginPath();cx.arc(x+1,y+3,2.5,0,7);cx.fill();
+    case 'buisson': {
+      // Ombre sous le buisson
+      const sh = getShadowOffset();
+      if (sh.alpha > 0) {
+        cx.fillStyle = `rgba(0,0,0,${sh.alpha * 0.75})`;
+        cx.beginPath(); cx.ellipse(x + sh.x, y + 4 + sh.y, 14, 5, 0, 0, 7); cx.fill();
+      } else {
+        cx.fillStyle = 'rgba(0,0,0,.15)';
+        cx.beginPath(); cx.ellipse(x, y + 4, 12, 4.5, 0, 0, 7); cx.fill();
+      }
+      // Contour foncé du buisson
+      cx.fillStyle = '#16330b';
+      cx.beginPath();
+      cx.arc(x - 5, y + 1, 9, 0, 7);
+      cx.arc(x + 5, y, 10, 0, 7);
+      cx.arc(x, y - 5, 11, 0, 7);
+      cx.fill();
+      
+      // Corps principal vert foncé
+      cx.fillStyle = '#2a5418';
+      cx.beginPath();
+      cx.arc(x - 5, y + 1, 7.5, 0, 7);
+      cx.arc(x + 5, y, 8.5, 0, 7);
+      cx.arc(x, y - 5, 9.5, 0, 7);
+      cx.fill();
+
+      // Feuillage intermédiaire (Medium green)
+      cx.fillStyle = '#4c8730';
+      cx.beginPath();
+      cx.arc(x - 3, y - 1, 5.5, 0, 7);
+      cx.arc(x + 3, y - 2, 6.5, 0, 7);
+      cx.arc(x, y - 6, 7.5, 0, 7);
+      cx.fill();
+
+      // Reflets de feuillage (Light green)
+      cx.fillStyle = '#7bc754';
+      cx.beginPath();
+      cx.arc(x - 1, y - 3, 3.5, 0, 7);
+      cx.arc(x + 1, y - 4, 4.5, 0, 7);
+      cx.arc(x, y - 7, 5.5, 0, 7);
+      cx.fill();
+      
+      // Baies rouges lumineuses
+      const berryPositions = [
+        {dx: -5, dy: -1},
+        {dx: 4, dy: -3},
+        {dx: 0, dy: 3}
+      ];
+      for (const b of berryPositions) {
+        // Ombre de la baie
+        cx.fillStyle = 'rgba(0,0,0,0.3)';
+        cx.beginPath(); cx.arc(x + b.dx, y + b.dy + 1, 2.5, 0, 7); cx.fill();
+        // Corps de la baie rouge
+        cx.fillStyle = '#e6321d';
+        cx.beginPath(); cx.arc(x + b.dx, y + b.dy, 2.5, 0, 7); cx.fill();
+        // Petit éclat blanc
+        cx.fillStyle = '#fff';
+        cx.fillRect(x + b.dx - 0.7, y + b.dy - 0.7, 1.2, 1.2);
+      }
       break;
+    }
     case 'rocher':
       cx.fillStyle='#6b6760';cx.beginPath();
       cx.moveTo(x-14,y+8);cx.lineTo(x-10,y-10);cx.lineTo(x,y-14);cx.lineTo(x+11,y-8);cx.lineTo(x+13,y+8);
@@ -3486,13 +3537,34 @@ function drawPlayer(x,y){
   cx.rotate(tilt);
   cx.translate(0, -(5 - bob));
 
-  // Orientation du sprite (flip horizontal si le joueur regarde à gauche)
-  if (Math.cos(player.facing) < 0) {
+  // Sélection du sprite en fonction de l'angle du regard
+  let activeSprite = sprites.player;
+  let flipX = false;
+  const angle = player.facing;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  
+  if (sin < -0.707) {
+    // Regarde en haut (dos)
+    activeSprite = sprites.player_back || sprites.player;
+  } else if (sin > 0.707) {
+    // Regarde en bas (face)
+    activeSprite = sprites.player || sprites.player;
+  } else {
+    // Regarde sur le côté (profil)
+    activeSprite = sprites.player_profile || sprites.player;
+    if (cos < 0) {
+      flipX = true; // face à gauche
+    }
+  }
+
+  // Orientation du sprite (flip horizontal si demandé)
+  if (flipX) {
     cx.scale(-1, 1);
   }
   
-  if (sprites.player) {
-    cx.drawImage(sprites.player, -18, -30, 36, 36);
+  if (activeSprite) {
+    cx.drawImage(activeSprite, -18, -30, 36, 36);
   }
   
   if(has('armure')) { cx.font='16px serif'; cx.fillText('🛡️', 10, -18); }
@@ -4538,12 +4610,32 @@ function drawRemotePlayer(rp, x, y) {
   cx.translate(0, -(5 - bob));
 
   // Orientation du regard
-  if (Math.cos(rp.facing) < 0) {
+  let activeSprite = sprites.player;
+  let flipX = false;
+  const angle = rp.facing;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  
+  if (sin < -0.707) {
+    // Regarde en haut (dos)
+    activeSprite = sprites.player_back || sprites.player;
+  } else if (sin > 0.707) {
+    // Regarde en bas (face)
+    activeSprite = sprites.player || sprites.player;
+  } else {
+    // Regarde sur le côté (profil)
+    activeSprite = sprites.player_profile || sprites.player;
+    if (cos < 0) {
+      flipX = true; // face à gauche
+    }
+  }
+
+  if (flipX) {
     cx.scale(-1, 1);
   }
   
-  if (sprites.player) {
-    cx.drawImage(sprites.player, -18, -30, 36, 36);
+  if (activeSprite) {
+    cx.drawImage(activeSprite, -18, -30, 36, 36);
   }
   
   if (rp.armor) { cx.font='16px serif'; cx.fillText('🛡️', 10, -18); }
