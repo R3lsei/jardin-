@@ -2537,6 +2537,9 @@ function update(dt){
     const hasBoots = player.inv && player.inv['bottes_hate'];
     
     let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1) * (hasBoots ? 1.2 : 1);
+    const wx = mouse.x + cam.x;
+    const wy = mouse.y + cam.y;
+    player.facing = Math.atan2(wy - player.y, wx - player.x);
     
     if (creativeMode) {
       player.stamina = player.maxstamina;
@@ -2646,6 +2649,9 @@ function update(dt){
   const onMud=map[(player.y/TS|0)*MW+(player.x/TS|0)]===7;
   const hasBoots = player.inv && player.inv['bottes_hate'];
   let spd=player.spd*(sprint?1.55:1)*(onMud?0.6:1)*(hasBoots?1.2:1);
+  const wx = mouse.x + cam.x;
+  const wy = mouse.y + cam.y;
+  player.facing = Math.atan2(wy - player.y, wx - player.x);
   
   if (creativeMode) {
     player.stamina = player.maxstamina;
