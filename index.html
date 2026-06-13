@@ -262,6 +262,14 @@
   <button class="bigbtn" onclick="location.reload()">↺ Rejouer</button>
 </div>
 
+<!-- CHAT CONSOLE -->
+<div id="chatPanel" style="display:none; position:fixed; bottom:20px; left:20px; width:calc(100% - 40px); max-width:600px; background:rgba(10,10,15,0.75); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px); border:1px solid rgba(255,209,102,0.15); border-radius:8px; padding:10px; box-shadow:0 8px 32px rgba(0,0,0,0.5); z-index:99999; font-family:'Inter', sans-serif;">
+  <div style="display:flex; align-items:center; gap:8px;">
+    <span style="color:#ffd166; font-weight:bold; font-size:16px;">/</span>
+    <input type="text" id="chatInput" placeholder="Entrez un code de triche... (ex: time set day, gamemode creative, give bois 99)" style="flex:1; background:transparent; border:none; color:#ffffff; font-size:14px; outline:none; font-family:inherit;">
+  </div>
+</div>
+
 <script>
 "use strict";
 /* ---------- MULTIJOUEUR GLOBALS ---------- */
@@ -500,7 +508,7 @@ const RECIPES = [
 
 /* ---------- ENTITÉS ---------- */
 let resources=[], trees=[], enemies=[], drops=[], fires=[], placed=[], particles=[], floaties=[], insects=[], diaries=[];
-let screenShake=0, paused=false;
+let screenShake=0, paused=false, selectedHotbarIdx=0;
 let musicEnabled=true, musicTimer=null, activeMusicOscillators=[];
 let isRaining=false, rainTimer=240, rainParticles=[], rainNoiseNode=null, rainFilter=null, rainGain=null;
 const structGrid={}; // "tx,ty" -> struct
@@ -557,6 +565,32 @@ function spawnTrees(){
       apples: Math.random() < 0.45 ? Math.floor(R(1, 4)) : 0
     });
     n++;
+  }
+}
+
+function growTree() {
+  let guard = 0;
+  while (guard++ < 200) {
+    const tx = Math.floor(rnd() * MW), ty = Math.floor(rnd() * MH);
+    const b = biomeMap[ty * MW + tx], t = map[ty * MW + tx];
+    if (solidTile(t)) continue;
+    const density = b === 1 ? 0.9 : b === 0 ? 0.12 : b === 2 ? 0.25 : 0.05;
+    if (rnd() > density) continue;
+    const x = tx * TS + TS / 2;
+    const y = ty * TS + TS / 2;
+    if (Math.hypot(x - SPAWN.x, y - SPAWN.y) < 90) continue;
+    if (Math.hypot(x - MACHINE.x, y - MACHINE.y) < 140) continue;
+    if (Math.hypot(x - BOSS_LAIR.x, y - BOSS_LAIR.y) < 200) continue;
+    if (trees.some(tr => Math.hypot(tr.x - x, tr.y - y) < 50)) continue;
+    if (placed.some(s => Math.hypot(s.x - x, s.y - y) < 40)) continue;
+    
+    const swamp = b === 2;
+    trees.push({
+      id: getNetId(), x, y, hp: 6, maxhp: 6, r: 13, size: R(0.85, 1.3),
+      swamp, biome: b, sway: R(0, 6.28), shake: 0,
+      apples: Math.random() < 0.45 ? Math.floor(R(1, 4)) : 0
+    });
+    break;
   }
 }
 
@@ -657,7 +691,7 @@ const player={
   torchOn:false, deaths:0, tpCd:0,
 };
 const has=(it,n=1)=>(player.inv[it]||0)>=n;
-function give(it,n=1){ player.inv[it]=(player.inv[it]||0)+n; updateHotbar(); }
+function give(it,n=1){ player.inv[it]=(player.inv[it]||0)+n; if(it==='bois') st.woodTotal += n; updateHotbar(); }
 function take(it,n=1){ player.inv[it]=Math.max(0,(player.inv[it]||0)-n); if(!player.inv[it])delete player.inv[it]; updateHotbar(); }
 function weaponDmg(){ let d=6; if(has('hache'))d=Math.max(d,14); if(has('lance'))d=Math.max(d,14); if(has('epee'))d=Math.max(d,24); return d; }
 function armorMul(){
@@ -671,41 +705,193 @@ function getBed(){ return placed.find(s=>s.type==='lit'||s.type==='tente'); }
 
 /* ---------- QUÊTES ---------- */
 const QUESTS=[
-  {t:'Premiers réflexes', d:'Récolte des matériaux de base (E près des plantes et brindilles).',
+  {t:'Premiers réflexes', d:'Je devrais récolter des matériaux de base autour de moi. Il me faut de la fibre végétale et des brindilles.',
    prog:()=>`🌿 ${player.inv.fibre||0}/5 fibres · 🪵 ${player.inv.brindille||0}/3 brindilles`,
    done:()=>has('fibre',5)&&has('brindille',3)},
-  {t:'L\'outilleur', d:'Ouvre l\'atelier (C) et fabrique une hache et une lance.',
+  {t:'L\'outilleur', d:'Je dois ouvrir mon atelier d\'artisanat (touche C) pour me fabriquer une hache et une lance de fortune.',
    prog:()=>`🪓 ${has('hache')?'✔':'✘'} hache · 🗡️ ${has('lance')?'✔':'✘'} lance`,
    done:()=>has('hache')&&has('lance')},
-  {t:'Bûcheron miniature', d:'Avec ta hache, abats un arbre (E répété sur le tronc) pour récolter du bois.',
+  {t:'Bûcheron miniature', d:'Équipé de ma hache, je devrais abattre un arbre en appuyant sur E devant le tronc pour récupérer du bois.',
    prog:()=>`🟫 ${player.inv.bois||0}/4 bois récoltés`,
    done:()=>st.woodTotal>=4},
-  {t:'Le ventre et la gorge', d:'Mange un champignon et bois une goutte de rosée (touches 1-9).',
+  {t:'Le ventre et la gorge', d:'La faim et la soif me tenaillent. Je devrais manger un champignon et boire de la rosée en les sélectionnant.',
    prog:()=>`🍄 ${st.ate?'✔':'✘'} mangé · 💧 ${st.drank?'✔':'✘'} bu`,
    done:()=>st.ate&&st.drank},
-  {t:'L\'artisan', d:'Fabrique un établi et place-le : il débloque murs, coffre et lit à proximité.',
+  {t:'L\'artisan', d:'Il me faut un établi pour fabriquer de meilleures structures. Je devrais en fabriquer un et le poser au sol.',
    prog:()=>`🛠️ ${placed.some(s=>s.type==='etabli')?'✔ placé':'✘ à placer'}`,
    done:()=>placed.some(s=>s.type==='etabli')},
-  {t:'Chez soi', d:'Près de ton établi, fabrique et place : 4 murs, un coffre et un lit. Le lit devient ton point de réapparition (T pour t\'y téléporter).',
+  {t:'Chez soi', d:'Je dois sécuriser ma position. Près de l\'établi, je devrais construire 4 murs, un coffre pour mes ressources et un lit pour me reposer.',
    prog:()=>`🧱 ${st.wallsBuilt}/4 · 📦 ${placed.some(s=>s.type==='coffre')?'✔':'✘'} · 🛏️ ${getBed()?'✔':'✘'}`,
    done:()=>st.wallsBuilt>=4&&placed.some(s=>s.type==='coffre')&&getBed()},
-  {t:'La loi du plus fort', d:'Les fourmis soldates patrouillent. Élimine-en 3 pour récupérer des carapaces.',
+  {t:'La loi du plus fort', d:'Ces fourmis soldates géantes sont agressives... Je dois en éliminer 3 pour récupérer des fragments de carapace.',
    prog:()=>`⚔️ ${st.soldierKills}/3 soldates vaincues`,
    done:()=>st.soldierKills>=3},
-  {t:'La Reine de la Souche', d:'Au sud-est vit Tarentula. Équipe-toi (épée, armure, bandages) et arrache-lui son Cristal arachnide.',
+  {t:'La Reine de la Souche', d:'Le grand danger rôde au sud-est... C\'est la tanière de Tarentula. Je dois bien m\'équiper d\'une épée, d\'une armure et de bandages pour la vaincre.',
    prog:()=>`💎 ${has('cristal')?'✔ cristal obtenu':'✘ vaincre le boss'}`,
    done:()=>has('cristal')},
-  {t:'Le retour', d:'Apporte le Cristal à la Machine de Rétrécissement, au nord-ouest (point doré sur la carte).',
+  {t:'Le retour', d:'J\'ai le Cristal ! Maintenant, il faut que j\'aille là-bas, au nord-ouest, pour alimenter la Machine de Rétrécissement et retrouver ma taille humaine.',
    prog:()=>`📍 ${Math.round(dist(player,MACHINE)/TS)} cm de la machine`,
    done:()=>false},
 ];
 let questIdx=0;
 const st={ate:false,drank:false,soldierKills:0,day:1,timeAlive:0,woodTotal:0,wallsBuilt:0};
 
-/* ---------- ENTRÉES ---------- */
+/* ---------- ENTRÉES & CONSOLE DE TRICHE ---------- */
 const keys={};
 let mouse={x:0,y:0,down:false};
+let chatOpen=false;
+let creativeMode=false;
+
+function openChat() {
+  if (!running || paused) return;
+  chatOpen = true;
+  const panel = document.getElementById('chatPanel');
+  const input = document.getElementById('chatInput');
+  panel.style.display = 'block';
+  input.value = '';
+  input.focus();
+  for (const k in keys) keys[k] = false;
+  beep(400, 0.05, 'sine', 0.02);
+}
+function closeChat() {
+  chatOpen = false;
+  document.getElementById('chatPanel').style.display = 'none';
+  document.getElementById('chatInput').blur();
+  beep(300, 0.05, 'sine', 0.02);
+}
+function submitChat() {
+  const input = document.getElementById('chatInput');
+  const text = input.value.trim();
+  closeChat();
+  if (text) {
+    executeCommand(text);
+  }
+}
+function executeCommand(cmdStr) {
+  let cmd = cmdStr;
+  if (cmd.startsWith('/')) cmd = cmd.slice(1);
+  cmd = cmd.trim();
+  
+  const parts = cmd.split(/\s+/);
+  const base = parts[0].toLowerCase();
+  
+  if (base === 'time') {
+    if (parts[1] === 'set') {
+      const val = parts[2] ? parts[2].toLowerCase() : '';
+      if (val === 'day') {
+        timeOfDay = 30;
+        st.day = st.day || 1;
+        msg('☀ Temps défini sur Jour', 'good');
+        playSound('quest');
+        if (netMode === 'host') broadcastSyncSlow();
+      } else if (val === 'night') {
+        timeOfDay = DAY_LEN;
+        msg('🌙 Temps défini sur Nuit', 'bad');
+        playSound('quest');
+        if (netMode === 'host') broadcastSyncSlow();
+      } else if (!isNaN(val)) {
+        timeOfDay = clamp(+val, 0, DAY_LEN + NIGHT_LEN);
+        msg(`🕒 Temps défini sur ${timeOfDay.toFixed(0)}`, 'good');
+        if (netMode === 'host') broadcastSyncSlow();
+      } else {
+        msg('❌ Usage: /time set <day | night | valeur>', 'bad');
+      }
+    } else {
+      msg('❌ Usage: /time set <day | night | valeur>', 'bad');
+    }
+  } 
+  else if (base === 'gamemode') {
+    const mode = parts[1] ? parts[1].toLowerCase() : '';
+    if (mode === 'creative' || mode === 'c') {
+      creativeMode = true;
+      player.hp = player.maxhp;
+      player.food = 100;
+      player.water = 100;
+      player.stamina = player.maxstamina;
+      msg('🎨 Mode de jeu défini sur Créatif', 'good');
+      playSound('quest');
+    } else if (mode === 'survival' || mode === 's') {
+      creativeMode = false;
+      msg('🌲 Mode de jeu défini sur Survie', 'good');
+      playSound('quest');
+    } else {
+      msg('❌ Usage: /gamemode <creative | survival>', 'bad');
+    }
+  } 
+  else if (base === 'give') {
+    const item = parts[1] ? parts[1].toLowerCase() : '';
+    const amountStr = parts[2] || '1';
+    const amount = parseInt(amountStr);
+    
+    if (ITEMS[item]) {
+      if (isNaN(amount) || amount <= 0) {
+        msg('❌ Quantité invalide', 'bad');
+      } else {
+        give(item, amount);
+        msg(`🎒 Donné ${amount} × ${ITEMS[item].n} à ${myNickname}`, 'good');
+        playSound('pickup');
+      }
+    } else {
+      msg(`❌ Objet inconnu. Exemples : bois, brindille, caillou, miel, bandage, lance, epee...`, 'bad');
+    }
+  } 
+  else if (base === 'heal') {
+    player.hp = player.maxhp;
+    player.food = 100;
+    player.water = 100;
+    player.stamina = player.maxstamina;
+    msg('💖 Points de vie et survie régénérés', 'good');
+    playSound('quest');
+  } 
+  else if (base === 'kill') {
+    player.hp = 0;
+    msg('💀 Vous vous êtes suicidé !', 'bad');
+    playSound('hurt');
+  } 
+  else if (base === 'tp') {
+    const target = parts[1] ? parts[1].toLowerCase() : '';
+    if (target === 'spawn') {
+      player.x = SPAWN.x; player.y = SPAWN.y;
+      msg('🌀 Téléporté au point d\'apparition', 'good');
+      playSound('teleport');
+    } else if (target === 'boss') {
+      player.x = BOSS_LAIR.x; player.y = BOSS_LAIR.y;
+      msg('🌀 Téléporté à la tanière du boss', 'bad');
+      playSound('teleport');
+    } else if (target === 'machine') {
+      player.x = MACHINE.x; player.y = MACHINE.y;
+      msg('🌀 Téléporté à la machine de secours', 'good');
+      playSound('teleport');
+    } else if (!isNaN(parts[1]) && !isNaN(parts[2])) {
+      player.x = clamp(+parts[1], 0, WPX);
+      player.y = clamp(+parts[2], 0, HPX);
+      msg(`🌀 Téléporté en (${player.x.toFixed(0)}, ${player.y.toFixed(0)})`, 'good');
+      playSound('teleport');
+    } else {
+      msg('❌ Usage: /tp <spawn | boss | machine | x y>', 'bad');
+    }
+  } 
+  else {
+    msg(`❌ Commande inconnue. Commandes : time, gamemode, give, tp, heal, kill`, 'bad');
+  }
+}
+
 addEventListener('keydown',e=>{
+  if (e.key === '/' && !chatOpen && !paused && !craftOpen && !chestOpen && !diaryOpen) {
+    e.preventDefault();
+    openChat();
+    return;
+  }
+  if (chatOpen) {
+    if (e.code === 'Escape') {
+      closeChat();
+    }
+    if (e.code === 'Enter') {
+      submitChat();
+    }
+    return;
+  }
+
   keys[e.code]=true;
   if(e.code==='Escape'){
     if(document.getElementById('craftPanel').style.display==='block'){closeCraft();}
@@ -721,7 +907,7 @@ addEventListener('keydown',e=>{
   if(/^Digit[0-9]$/.test(e.code)){const d=+e.code.slice(5);useHotbar(d===0?9:d-1);}
 });
 addEventListener('keyup',e=>keys[e.code]=false);
-window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; }); // Empêcher le perso de bouger tout seul
+window.addEventListener('blur',()=>{ for(const k in keys) keys[k]=false; });
 
 addEventListener('click', e => {
   if (paused && e.target === cv) {
@@ -759,8 +945,16 @@ function togglePause() {
   }
 }
 
+cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;});
-cv.addEventListener('mousedown',()=>{mouse.down=true;tryAttack();});
+cv.addEventListener('mousedown', e => {
+  if (e.button === 0) {
+    mouse.down = true;
+    tryAttack();
+  } else if (e.button === 2) {
+    tryRightClickAction();
+  }
+});
 addEventListener('mouseup',()=>mouse.down=false);
 
 /* ---------- AUDIO ---------- */
@@ -1128,7 +1322,7 @@ function updateHotbar(){
   HOTKEYS.forEach((it,i)=>{
     const c=player.inv[it]||0;
     const s=document.createElement('div');
-    s.className='slot'+(c?'':' empty');
+    s.className='slot'+(c?'':' empty')+(i===selectedHotbarIdx?' sel':'');
     s.innerHTML=`<span class="num">${(i+1)%10}</span>${ITEMS[it].ic}${c?`<span class="cnt">${c}</span>`:''}`;
     s.title=ITEMS[it].n;
     s.onclick=()=>useHotbar(i);
@@ -1172,56 +1366,74 @@ function useItem(it){
   }
 }
 function useHotbar(i){
-  const it=HOTKEYS[i];
+  selectedHotbarIdx = i;
+  updateHotbar();
+  beep(420, .05, 'sine', 0.03);
+}
+
+function tryRightClickAction() {
+  if (paused || !running || craftOpen || chestOpen || diaryOpen || chatOpen) return;
+  const it = HOTKEYS[selectedHotbarIdx];
+  if (!it) return;
+  if (!creativeMode && !has(it)) return;
   useItem(it);
 }
 
 /* ---------- CONSTRUCTION ---------- */
 function tryPlace(it){
-  if(it==='feu'){
-    if (netMode === 'client') {
-      conn.send({ type: 'action', action: 'place', item: 'feu' });
-      take(it);
-      return;
-    }
-    fires.push({id: getNetId(), x:player.x,y:player.y+4,t:0});take(it);
-    if(!getBed())player.spawnPoint={x:player.x,y:player.y};
-    msg('🏕️ Feu de camp placé.','good');beep(300,.2,'triangle');
+  const wx = mouse.x + cam.x;
+  const wy = mouse.y + cam.y;
+  const tx = wx / TS | 0;
+  const ty = wy / TS | 0;
+  
+  if (Math.hypot(wx - player.x, wy - player.y) > TS * 4.0) {
+    msg('⛔ Trop loin ! Construit plus près de toi.', 'bad');
     return;
   }
-  // murs : à la position de la souris (max 3,5 tuiles)
-  let tx,ty;
-  if(it==='mur'){
-    const wx=mouse.x+cam.x,wy=mouse.y+cam.y;
-    tx=wx/TS|0;ty=wy/TS|0;
-    if(Math.hypot(wx-player.x,wy-player.y)>TS*3.5){msg('🧱 Trop loin ! Place le mur plus près de toi.','bad');return;}
-  }else{
-    // devant le joueur
-    const a=player.facing;
-    tx=(player.x+Math.cos(a)*TS*1.3)/TS|0;
-    ty=(player.y+Math.sin(a)*TS*1.3)/TS|0;
+  
+  if (it === 'feu') {
+    if (netMode === 'client') {
+      conn.send({ type: 'action', action: 'place', item: 'feu', tx: tx, ty: ty });
+      if (!creativeMode) take(it);
+      return;
+    }
+    const cxw = tx * TS + TS / 2;
+    const cyw = ty * TS + TS / 2;
+    fires.push({ id: getNetId(), x: cxw, y: cyw, t: 0, hp: 60, maxhp: 60 });
+    if (!creativeMode) take(it);
+    if (!getBed()) player.spawnPoint = { x: cxw, y: cyw };
+    msg('🏕️ Feu de camp placé.', 'good'); beep(300, .2, 'triangle');
+    return;
   }
-  if(tx<1||ty<1||tx>=MW-1||ty>=MH-1)return;
-  if(solidTile(map[ty*MW+tx])){msg('⛔ Impossible de construire ici (eau/rocher).','bad');return;}
-  if(structGrid[skey(tx,ty)]){msg('⛔ Il y a déjà une construction ici.','bad');return;}
-  const cxw=tx*TS+TS/2,cyw=ty*TS+TS/2;
-  if(Math.hypot(cxw-player.x,cyw-player.y)<player.r+14&&it==='mur'){msg('⛔ Tu es dans le passage !','bad');return;}
-  if(trees.some(t=>Math.hypot(t.x-cxw,t.y-cyw)<30)){msg('⛔ Un arbre gêne la construction.','bad');return;}
+  
+  if (tx < 1 || ty < 1 || tx >= MW - 1 || ty >= MH - 1) return;
+  if (solidTile(map[ty * MW + tx])) { msg('⛔ Impossible de construire ici (eau/rocher).', 'bad'); return; }
+  if (structGrid[skey(tx, ty)]) { msg('⛔ Il y a déjà une construction ici.', 'bad'); return; }
+  
+  const cxw = tx * TS + TS / 2;
+  const cyw = ty * TS + TS / 2;
+  
+  if (it === 'mur' && Math.hypot(cxw - player.x, cyw - player.y) < player.r + 14) {
+    msg('⛔ Tu es dans le passage !', 'bad');
+    return;
+  }
+  if (trees.some(t => Math.hypot(t.x - cxw, t.y - cyw) < 30)) { msg('⛔ Un arbre gêne la construction.', 'bad'); return; }
   
   if (netMode === 'client') {
     conn.send({ type: 'action', action: 'place', item: it, tx: tx, ty: ty });
-    take(it);
+    if (!creativeMode) take(it);
     return;
   }
   
-  const s={id: getNetId(), type:it,tx,ty,x:cxw,y:cyw,hp:it==='mur'?60:80,maxhp:it==='mur'?60:80};
-  if(it==='coffre')s.inv={};
-  placed.push(s);structGrid[skey(tx,ty)]=s;
-  take(it);player.built++;
-  if(it==='mur'){st.wallsBuilt++;beep(160,.1,'square');}
-  if(it==='etabli'){msg('🛠️ Établi placé ! Murs, coffre et lit sont désormais fabricables à proximité.','good');beep(330,.15,'triangle');}
-  if(it==='coffre'){msg('📦 Coffre placé. Approche-toi et appuie sur E pour l\'ouvrir.','good');beep(330,.15,'triangle');}
-  if(it==='lit'){player.spawnPoint={x:cxw,y:cyw+TS};msg('🛏️ Lit placé : point de réapparition défini. T pour t\'y téléporter, E la nuit pour dormir.','good');beep(440,.2,'sine');}
+  const s = { id: getNetId(), type: it, tx, ty, x: cxw, y: cyw, hp: it === 'mur' ? 60 : 80, maxhp: it === 'mur' ? 60 : 80 };
+  if (it === 'coffre') s.inv = {};
+  placed.push(s); structGrid[skey(tx, ty)] = s;
+  if (!creativeMode) take(it);
+  player.built++;
+  if (it === 'mur') { st.wallsBuilt++; beep(160, .1, 'square'); }
+  if (it === 'etabli') { msg('🛠️ Établi placé ! Murs, coffre et lit sont désormais fabricables à proximité.', 'good'); beep(330, .15, 'triangle'); }
+  if (it === 'coffre') { msg('📦 Coffre placé. Approche-toi et appuie sur E pour l\'ouvrir.', 'good'); beep(330, .15, 'triangle'); }
+  if (it === 'lit') { player.spawnPoint = { x: cxw, y: cyw + TS }; msg('🛏️ Lit placé : point de réapparition défini. T pour t\'y téléporter, E la nuit pour dormir.', 'good'); beep(440, .2, 'sine'); }
 }
 function tryTeleport(){
   const bed=getBed();
@@ -1260,14 +1472,16 @@ function renderCraft(){
     const matOk=Object.entries(r.cost).every(([k,v])=>has(k,v));
     const needE=r.near&&!nearE;
     const ownedTool=(it.tool||it.weapon||it.armor||it.torch)&&has(r.id);
-    const ok=matOk&&!needE&&!ownedTool;
+    const ok=creativeMode ? !ownedTool : (matOk && !needE && !ownedTool);
     const div=document.createElement('div');
     div.className='recipe '+(ok?'ok':'no');
     div.innerHTML=`<div class="ric">${it.ic}</div>
-      <div><div class="rname">${it.n}${r.gives?` ×${r.gives}`:''}${ownedTool?' — possédé':''}${r.near?`<span class="rtag">${needE?'⚠ ':''}ÉTABLI REQUIS</span>`:''}</div><div class="rdesc">${r.desc}</div></div>
-      <div class="rcost">${Object.entries(r.cost).map(([k,v])=>`<span class="${has(k,v)?'has':'miss'}">${ITEMS[k].ic}${player.inv[k]||0}/${v}</span>`).join('<br>')}</div>`;
+      <div><div class="rname">${it.n}${r.gives?` ×${r.gives}`:''}${ownedTool?' — possédé':''}${r.near?`<span class="rtag">${(needE && !creativeMode)?'⚠ ':''}ÉTABLI REQUIS</span>`:''}</div><div class="rdesc">${r.desc}</div></div>
+      <div class="rcost">${Object.entries(r.cost).map(([k,v])=>`<span class="${(creativeMode || has(k,v))?'has':'miss'}">${ITEMS[k].ic}${player.inv[k]||0}/${v}</span>`).join('<br>')}</div>`;
     if(ok)div.onclick=()=>{
-      Object.entries(r.cost).forEach(([k,v])=>take(k,v));
+      if (!creativeMode) {
+        Object.entries(r.cost).forEach(([k,v])=>take(k,v));
+      }
       give(r.id,r.gives||1);player.crafted++;
       msg(`⚒ ${it.n}${r.gives?' ×'+r.gives:''} fabriqué !`,'good');beep(440,.12,'triangle');beep(660,.12,'triangle');
       renderCraft();
@@ -2050,7 +2264,6 @@ function initTerrainChunks() {
 }
 
 /* ---------- UTILITAIRES ---------- */
-function rnd(m=1){return Math.random()*m;}
 
 /* ---------- COMBAT ---------- */
 function tryAttack(){
@@ -2115,9 +2328,29 @@ function tryAttack(){
           playSound('hit'); screenShake = 0.08;
           if(s.hp<=0){
             placed.splice(placed.indexOf(s),1);delete structGrid[skey(s.tx,s.ty)];
-            if(s.type==='mur'){st.wallsBuilt=Math.max(0,st.wallsBuilt-1);drops.push({id: getNetId(), x:s.x,y:s.y,it:'bois',bob:0});}
-            if(s.type==='coffre'&&s.inv)for(const[k,v]of Object.entries(s.inv))for(let i=0;i<Math.min(v,8);i++)drops.push({id: getNetId(), x:s.x+R(-12,12),y:s.y+R(-12,12),it:k,bob:R(0,6)});
+            drops.push({id: getNetId(), x:s.x,y:s.y,it:s.type,bob:0});
+            if(s.type==='mur'){st.wallsBuilt=Math.max(0,st.wallsBuilt-1);}
+            if(s.type==='coffre'&&s.inv)for(const[k,v]of Object.entries(s.inv))for(let i=0;i<v;i++)drops.push({id: getNetId(), x:s.x+R(-12,12),y:s.y+R(-12,12),it:k,bob:R(0,6)});
             msg(`💥 ${ITEMS[s.type].n} détruit.`,'bad');
+          }
+          break;
+        }
+      }
+    }
+  }
+  if(!hit){
+    for(const f of fires){
+      if(Math.hypot(f.x-player.x,f.y-player.y)<range+18){
+        const ang=Math.atan2(f.y-player.y,f.x-player.x);
+        let diff=Math.abs(((ang-player.facing)+Math.PI*3)%(Math.PI*2)-Math.PI);
+        if(diff<0.9){
+          f.hp=(f.hp===undefined?60:f.hp)-dmg;hit=true;
+          particles.push(...burst(f.x,f.y,5,'#ff9a3c'));
+          playSound('hit'); screenShake = 0.08;
+          if(f.hp<=0){
+            fires.splice(fires.indexOf(f),1);
+            drops.push({id: getNetId(), x:f.x,y:f.y,it:'feu',bob:0});
+            msg('💥 Feu de camp détruit.','bad');
           }
           break;
         }
@@ -2275,17 +2508,24 @@ function update(dt){
 
   if (netMode === 'client') {
     st.timeAlive += dt;
-    player.food = clamp(player.food - dt * 0.30, 0, 100);
-    player.water = clamp(player.water - dt * 0.75, 0, 100);
-    if (player.food <= 0 || player.water <= 0) {
-      player.hp -= dt * 4;
-      if (Math.random() < dt) msg(player.food <= 0 ? '🍖 Tu meurs de faim !' : '💧 Tu meurs de soif !', 'bad');
+    if (creativeMode) {
+      player.hp = player.maxhp;
+      player.food = 100;
+      player.water = 100;
+      player.stamina = player.maxstamina;
+    } else {
+      player.food = clamp(player.food - dt * 0.30, 0, 100);
+      player.water = clamp(player.water - dt * 0.75, 0, 100);
+      if (player.food <= 0 || player.water <= 0) {
+        player.hp -= dt * 4;
+        if (Math.random() < dt) msg(player.food <= 0 ? '🍖 Tu meurs de faim !' : '💧 Tu meurs de soif !', 'bad');
+      }
+      else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
     }
-    else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
     
     // Movement
     let dx = 0, dy = 0;
-    if (!paused) {
+    if (!paused && !chatOpen) {
       if (keys.KeyW || keys.KeyZ || keys.ArrowUp) dy -= 1;
       if (keys.KeyS || keys.ArrowDown) dy += 1;
       if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) dx -= 1;
@@ -2298,7 +2538,9 @@ function update(dt){
     
     let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1) * (hasBoots ? 1.2 : 1);
     
-    if (sprint && (dx || dy)) {
+    if (creativeMode) {
+      player.stamina = player.maxstamina;
+    } else if (sprint && (dx || dy)) {
       player.stamina = Math.max(0, player.stamina - dt * 25);
     } else {
       const recoveryRate = 15 * (has('chapeau_fleur') ? 1.2 : 1);
@@ -2352,21 +2594,34 @@ function update(dt){
     for(let i=0;i<6+st.day;i++)spawnSomewhere('araignee');
     isNightAnnounced=true;setTimeout(()=>isNightAnnounced=false,2000);
   }
+  
+  // Tree regrowth
+  if (trees.length < 140 && Math.random() < dt * 0.05) {
+    growTree();
+  }
+
   document.getElementById('dayLabel').textContent=(isNight()?'🌙 NUIT ':'☀ JOUR ')+st.day;
   const pb=biomeMap[(player.y/TS|0)*MW+(player.x/TS|0)];
   document.getElementById('biomeLabel').textContent=BIOME_NAMES[pb]||'';
 
   /* survie */
-  player.food=clamp(player.food-dt*0.30,0,100);
-  player.water=clamp(player.water-dt*0.75,0,100);
-  if(player.food<=0||player.water<=0){player.hp-=dt*4;if(Math.random()<dt)msg(player.food<=0?'🍖 Tu meurs de faim !':'💧 Tu meurs de soif !','bad');}
-  else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
-  for(const f of fires){if(dist(player,f)<70)player.hp=clamp(player.hp+dt*3,0,player.maxhp);f.t+=dt;}
+  if (creativeMode) {
+    player.hp = player.maxhp;
+    player.food = 100;
+    player.water = 100;
+    player.stamina = player.maxstamina;
+  } else {
+    player.food=clamp(player.food-dt*0.30,0,100);
+    player.water=clamp(player.water-dt*0.75,0,100);
+    if(player.food<=0||player.water<=0){player.hp-=dt*4;if(Math.random()<dt)msg(player.food<=0?'🍖 Tu meurs de faim !':'💧 Tu meurs de soif !','bad');}
+    else if(player.food>60&&player.water>60)player.hp=clamp(player.hp+dt*1.2,0,player.maxhp);
+  }
+  for(const f of fires){if(dist(player,f)<70 && player.hp < player.maxhp)player.hp=clamp(player.hp+dt*3,0,player.maxhp);f.t+=dt;}
   player.tpCd=Math.max(0,player.tpCd-dt);
 
   /* mouvement */
   let dx=0,dy=0;
-  if (!paused) {
+  if (!paused && !chatOpen) {
     if(keys.KeyW||keys.KeyZ||keys.ArrowUp)dy-=1;
     if(keys.KeyS||keys.ArrowDown)dy+=1;
     if(keys.KeyA||keys.KeyQ||keys.ArrowLeft)dx-=1;
@@ -2374,12 +2629,13 @@ function update(dt){
   }
   
   const sprint=(keys.ShiftLeft||keys.ShiftRight)&&player.stamina>2;
-  // marais : boue ralentit
   const onMud=map[(player.y/TS|0)*MW+(player.x/TS|0)]===7;
   const hasBoots = player.inv && player.inv['bottes_hate'];
   let spd=player.spd*(sprint?1.55:1)*(onMud?0.6:1)*(hasBoots?1.2:1);
   
-  if(sprint&&(dx||dy)) player.stamina = Math.max(0, player.stamina - dt * 25);
+  if (creativeMode) {
+    player.stamina = player.maxstamina;
+  } else if(sprint&&(dx||dy)) player.stamina = Math.max(0, player.stamina - dt * 25);
   else {
     const recoveryRate = 15 * (has('chapeau_fleur') ? 1.2 : 1);
     player.stamina = Math.min(player.maxstamina, player.stamina + dt * recoveryRate);
@@ -2393,7 +2649,7 @@ function update(dt){
   player.atkCd=Math.max(0,player.atkCd-dt);
   player.iFrames=Math.max(0,player.iFrames-dt);
   player.swing=Math.max(0,(player.swing||0)-dt);
-  if(mouse.down && !paused)tryAttack();
+  if(mouse.down && !paused && !chatOpen)tryAttack();
 
   /* ramassage */
   for(let i=drops.length-1;i>=0;i--){
@@ -2604,7 +2860,7 @@ function render(){
     if(sx<-50||sy<-50||sx>cv.width+50||sy>cv.height+50)continue;
     drawStruct(s,sx,sy);
   }
-  for(const f of fires)drawFire(f.x-cam.x,f.y-cam.y,f.t);
+  for(const f of fires)drawFire(f.x-cam.x,f.y-cam.y,f.t,f.hp,60);
 
   /* ressources */
   for(const r of resources){
@@ -2800,17 +3056,42 @@ function render(){
 }
 
 function drawWallGhost(){
-  if(!has('mur'))return;
-  const wx=mouse.x+cam.x,wy=mouse.y+cam.y;
-  if(Math.hypot(wx-player.x,wy-player.y)>TS*3.5)return;
-  const tx=wx/TS|0,ty=wy/TS|0;
-  const free=!solidTile(map[ty*MW+tx])&&!structGrid[skey(tx,ty)];
-  cx.globalAlpha=0.35;
-  cx.fillStyle=free?'#c8a05a':'#d8453c';
-  cx.fillRect(tx*TS-cam.x,ty*TS-cam.y,TS,TS);
-  cx.globalAlpha=1;
-  cx.strokeStyle=free?'rgba(242,180,65,.7)':'rgba(216,69,60,.8)';
-  cx.lineWidth=1.5;cx.strokeRect(tx*TS-cam.x,ty*TS-cam.y,TS,TS);
+  const it = HOTKEYS[selectedHotbarIdx];
+  if (!it) return;
+  if (!creativeMode && !has(it)) return;
+  const def = ITEMS[it];
+  if (!def || !def.place) return;
+  
+  const wx = mouse.x + cam.x, wy = mouse.y + cam.y;
+  const inRange = Math.hypot(wx - player.x, wy - player.y) <= TS * 4.0;
+  const tx = wx / TS | 0, ty = wy / TS | 0;
+  if (tx < 1 || ty < 1 || tx >= MW - 1 || ty >= MH - 1) return;
+  
+  const cxw = tx * TS + TS / 2;
+  const cyw = ty * TS + TS / 2;
+  
+  let valid = inRange && !solidTile(map[ty * MW + tx]) && !structGrid[skey(tx, ty)];
+  if (valid && it === 'mur' && Math.hypot(cxw - player.x, cyw - player.y) < player.r + 14) {
+    valid = false;
+  }
+  if (valid && trees.some(t => Math.hypot(t.x - cxw, t.y - cyw) < 30)) {
+    valid = false;
+  }
+  
+  cx.save();
+  cx.globalAlpha = 0.35;
+  cx.fillStyle = valid ? '#5cd65c' : '#d8453c';
+  cx.fillRect(tx * TS - cam.x, ty * TS - cam.y, TS, TS);
+  cx.globalAlpha = 1;
+  cx.strokeStyle = valid ? 'rgba(92, 214, 92, 0.7)' : 'rgba(216, 69, 60, 0.8)';
+  cx.lineWidth = 1.5;
+  cx.strokeRect(tx * TS - cam.x, ty * TS - cam.y, TS, TS);
+  
+  cx.font = '14px sans-serif';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(def.ic, tx * TS - cam.x + TS / 2, ty * TS - cam.y + TS / 2);
+  cx.restore();
 }
 
 function drawStruct(s,x,y){
@@ -2840,6 +3121,32 @@ function drawStruct(s,x,y){
     if(dist(player,s)<55){
       cx.fillStyle='#f2b441';cx.font='bold 10px sans-serif';cx.textAlign='center';
       cx.fillText(isNight()?'[E] Dormir':'🛏 Point de réapparition',x,y-16);
+    }
+  }else if(s.type==='tente'){
+    cx.fillStyle='rgba(0,0,0,.3)';cx.beginPath();cx.ellipse(x,y+12,20,6,0,0,7);cx.fill();
+    cx.fillStyle='#bf9150';
+    cx.beginPath();
+    cx.moveTo(x-18, y+10);
+    cx.lineTo(x, y-16);
+    cx.lineTo(x+18, y+10);
+    cx.closePath();
+    cx.fill();
+    cx.fillStyle='#5a3e1c';
+    cx.beginPath();
+    cx.moveTo(x-8, y+10);
+    cx.lineTo(x, y-4);
+    cx.lineTo(x+8, y+10);
+    cx.closePath();
+    cx.fill();
+    cx.strokeStyle='#3a250f'; cx.lineWidth=2.5;
+    cx.beginPath();
+    cx.moveTo(x-18, y+10); cx.lineTo(x-18, y+14);
+    cx.moveTo(x+18, y+10); cx.lineTo(x+18, y+14);
+    cx.moveTo(x, y-16); cx.lineTo(x, y-20);
+    cx.stroke();
+    if(dist(player,s)<55){
+      cx.fillStyle='#f2b441';cx.font='bold 10px sans-serif';cx.textAlign='center';
+      cx.fillText(isNight()?'[E] Dormir':'⛺ Point de réapparition portable',x,y-24);
     }
   }
   if(s.hp<s.maxhp){
@@ -3137,24 +3444,63 @@ function drawStump(x,y){
   for(let i=0;i<6;i++){const a=i/6*Math.PI*2;cx.beginPath();cx.moveTo(0,0);cx.lineTo(Math.cos(a)*70,Math.sin(a)*55);cx.stroke();}
   cx.restore();
 }
-function drawFire(x,y,t){
+function drawFire(x,y,t,hp,maxhp){
   cx.fillStyle='#3a2a18';
   for(let i=0;i<5;i++){const a=i/5*6.28;cx.save();cx.translate(x+Math.cos(a)*9,y+Math.sin(a)*5);cx.rotate(a);cx.fillRect(-6,-2,12,4);cx.restore();}
   const f=Math.sin(performance.now()/90)*2;
   const g=cx.createRadialGradient(x,y-6,2,x,y-6,14+f);
   g.addColorStop(0,'#fff3b0');g.addColorStop(0.5,'#f2a13c');g.addColorStop(1,'rgba(216,69,60,0)');
   cx.fillStyle=g;cx.beginPath();cx.arc(x,y-6,14+f,0,7);cx.fill();
+  
+  if(hp!==undefined && maxhp!==undefined && hp<maxhp){
+    cx.fillStyle='rgba(0,0,0,.6)';cx.fillRect(x-14,y-22,28,3.5);
+    cx.fillStyle='#f2b441';cx.fillRect(x-14,y-22,28*hp/maxhp,3.5);
+  }
 }
 
 let sharedLightCanvas = null;
 let sharedLightCtx = null;
 
+function getDarknessColor(t) {
+  let r = 5, g = 6, b = 20, a = 0;
+  
+  if (t >= 150 && t < 170) {
+    const p = (t - 150) / 20;
+    r = Math.round(220 + (5 - 220) * p);
+    g = Math.round(90 + (6 - 90) * p);
+    b = Math.round(40 + (20 - 40) * p);
+    a = p * 0.85;
+  } else if (t >= 170 && t < 230) {
+    r = 5; g = 6; b = 20;
+    a = 0.85;
+  } else if (t >= 230 && t < 250) {
+    const p = (t - 230) / 20;
+    if (p < 0.5) {
+      const p2 = p * 2;
+      r = Math.round(5 + (240 - 5) * p2);
+      g = Math.round(6 + (100 - 6) * p2);
+      b = Math.round(20 + (40 - 20) * p2);
+      a = 0.85 + (0.45 - 0.85) * p2;
+    } else {
+      const p2 = (p - 0.5) * 2;
+      r = Math.round(240 + (255 - 240) * p2);
+      g = Math.round(100 + (220 - 100) * p2);
+      b = Math.round(40 + (180 - 40) * p2);
+      a = 0.45 * (1 - p2);
+    }
+  } else if (t >= 0 && t < 10) {
+    const p = t / 10;
+    r = 255; g = 220; b = 180;
+    a = 0.08 * (1 - p);
+  }
+  
+  return { r, g, b, a };
+}
+
 function drawDarkness(){
-  let dark=0;
-  if(timeOfDay>DAY_LEN-20&&timeOfDay<DAY_LEN)dark=(timeOfDay-(DAY_LEN-20))/20*0.82;
-  else if(isNight())dark=0.82;
-  if(timeOfDay<14)dark=Math.max(dark,0.82*(1-timeOfDay/14));
-  if(dark<=0.01)return;
+  const t = timeOfDay;
+  const col = getDarknessColor(t);
+  if (col.a <= 0.005) return;
   
   if (!sharedLightCanvas) {
     sharedLightCanvas = document.createElement('canvas');
@@ -3167,20 +3513,28 @@ function drawDarkness(){
   
   const lc = sharedLightCanvas;
   const l = sharedLightCtx;
-  l.fillStyle=`rgba(5,6,20,${dark})`;l.fillRect(0,0,lc.width,lc.height);
-  l.globalCompositeOperation='destination-out';
-  const px=player.x-cam.x,py=player.y-cam.y;
-  const rad=player.torchOn?230:120;
-  const g=l.createRadialGradient(px,py,rad*0.25,px,py,rad);
-  g.addColorStop(0,'rgba(0,0,0,1)');g.addColorStop(1,'rgba(0,0,0,0)');
-  l.fillStyle=g;l.beginPath();l.arc(px,py,rad,0,7);l.fill();
-  for(const f of fires){
-    const fx=f.x-cam.x,fy=f.y-cam.y;
-    const fr=160+Math.sin(performance.now()/120)*8;
-    const g2=l.createRadialGradient(fx,fy,20,fx,fy,fr);
-    g2.addColorStop(0,'rgba(0,0,0,1)');g2.addColorStop(1,'rgba(0,0,0,0)');
-    l.fillStyle=g2;l.beginPath();l.arc(fx,fy,fr,0,7);l.fill();
+  
+  l.clearRect(0, 0, lc.width, lc.height);
+  
+  l.globalCompositeOperation = 'source-over';
+  l.fillStyle = `rgba(${col.r}, ${col.g}, ${col.b}, ${col.a})`;
+  l.fillRect(0, 0, lc.width, lc.height);
+  
+  l.globalCompositeOperation = 'destination-out';
+  const px = player.x - cam.x, py = player.y - cam.y;
+  const rad = player.torchOn ? 230 : 120;
+  const g = l.createRadialGradient(px, py, rad * 0.25, px, py, rad);
+  g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(1, 'rgba(0,0,0,0)');
+  l.fillStyle = g; l.beginPath(); l.arc(px, py, rad, 0, 7); l.fill();
+  
+  for (const f of fires) {
+    const fx = f.x - cam.x, fy = f.y - cam.y;
+    const fr = 160 + Math.sin(performance.now() / 120) * 8;
+    const g2 = l.createRadialGradient(fx, fy, 20, fx, fy, fr);
+    g2.addColorStop(0, 'rgba(0,0,0,1)'); g2.addColorStop(1, 'rgba(0,0,0,0)');
+    l.fillStyle = g2; l.beginPath(); l.arc(fx, fy, fr, 0, 7); l.fill();
   }
+  
   for (const ins of insects) {
     if (ins.type === 'luciole') {
       const ix = ins.x - cam.x;
@@ -3199,21 +3553,22 @@ function drawDarkness(){
       }
     }
   }
-  cx.drawImage(lc,0,0);
   
-  // Lumières colorées
-  cx.globalCompositeOperation='lighter';
-  if(player.torchOn){
-    const gl=cx.createRadialGradient(px,py,20,px,py,200);
-    gl.addColorStop(0,'rgba(255,160,50,0.15)');gl.addColorStop(1,'rgba(255,160,50,0)');
-    cx.fillStyle=gl;cx.beginPath();cx.arc(px,py,200,0,7);cx.fill();
+  cx.drawImage(lc, 0, 0);
+  
+  cx.save();
+  cx.globalCompositeOperation = 'lighter';
+  if (player.torchOn) {
+    const gl = cx.createRadialGradient(px, py, 20, px, py, 200);
+    gl.addColorStop(0, 'rgba(255, 160, 50, 0.12)'); gl.addColorStop(1, 'rgba(255, 160, 50, 0)');
+    cx.fillStyle = gl; cx.beginPath(); cx.arc(px, py, 200, 0, 7); cx.fill();
   }
-  for(const f of fires){
-    const fx=f.x-cam.x,fy=f.y-cam.y;
-    const fr=160+Math.sin(performance.now()/120)*8;
-    const g2=cx.createRadialGradient(fx,fy,20,fx,fy,fr);
-    g2.addColorStop(0,'rgba(255,120,30,0.2)');g2.addColorStop(1,'rgba(255,120,30,0)');
-    cx.fillStyle=g2;cx.beginPath();cx.arc(fx,fy,fr,0,7);cx.fill();
+  for (const f of fires) {
+    const fx = f.x - cam.x, fy = f.y - cam.y;
+    const fr = 160 + Math.sin(performance.now() / 120) * 8;
+    const g2 = cx.createRadialGradient(fx, fy, 20, fx, fy, fr);
+    g2.addColorStop(0, 'rgba(255, 120, 30, 0.15)'); g2.addColorStop(1, 'rgba(255, 120, 30, 0)');
+    cx.fillStyle = g2; cx.beginPath(); cx.arc(fx, fy, fr, 0, 7); cx.fill();
   }
   for (const ins of insects) {
     if (ins.type === 'luciole') {
@@ -3233,7 +3588,7 @@ function drawDarkness(){
       }
     }
   }
-  cx.globalCompositeOperation='source-over';
+  cx.restore();
 }
 
 function drawObjectiveArrow(){
@@ -3612,7 +3967,8 @@ function handleHostMessage(clientPeerId, data) {
         x: data.x, y: data.y, targetX: data.x, targetY: data.y,
         facing: data.facing, hp: data.hp, food: data.food, water: data.water,
         swing: data.swing, nickname: data.nickname, armor: data.armor, chapeau: data.chapeau,
-        torchOn: data.torchOn, inv: data.inv, iFrames: 0, lastSeen: performance.now()
+        torchOn: data.torchOn, inv: data.inv, iFrames: 0, lastSeen: performance.now(),
+        creative: data.creative
       };
     } else {
       const rp = remotePlayers[clientPeerId];
@@ -3620,6 +3976,7 @@ function handleHostMessage(clientPeerId, data) {
       rp.facing = data.facing; rp.hp = data.hp; rp.food = data.food; rp.water = data.water;
       rp.swing = data.swing; rp.armor = data.armor; rp.chapeau = data.chapeau; rp.torchOn = data.torchOn;
       rp.inv = data.inv; rp.lastSeen = performance.now();
+      rp.creative = data.creative;
     }
   } else if (data.type === 'action') {
     if (data.action === 'attack') {
@@ -3749,7 +4106,8 @@ function sendClientUpdate(){
       armor: has('armure'),
       chapeau: has('chapeau_fleur'),
       torchOn: player.torchOn,
-      inv: player.inv
+      inv: player.inv,
+      creative: creativeMode
     });
   }
 }
@@ -3814,12 +4172,30 @@ function processPlayerAttack(p, dmg, facing) {
           particles.push(...burst(s.x, s.y, 5, '#a07040'));
           if (s.hp <= 0) {
             placed.splice(placed.indexOf(s), 1); delete structGrid[skey(s.tx, s.ty)];
-            if (s.type === 'mur') { st.wallsBuilt = Math.max(0, st.wallsBuilt - 1); drops.push({ id: getNetId(), x: s.x, y: s.y, it: 'bois', bob: 0 }); }
+            drops.push({ id: getNetId(), x: s.x, y: s.y, it: s.type, bob: 0 });
+            if (s.type === 'mur') { st.wallsBuilt = Math.max(0, st.wallsBuilt - 1); }
             if (s.type === 'coffre' && s.inv) {
               for (const [k, v] of Object.entries(s.inv)) {
-                for (let i = 0; i < Math.min(v, 8); i++) drops.push({ id: getNetId(), x: s.x + R(-12, 12), y: s.y + R(-12, 12), it: k, bob: R(0, 6) });
+                for (let i = 0; i < v; i++) drops.push({ id: getNetId(), x: s.x + R(-12, 12), y: s.y + R(-12, 12), it: k, bob: R(0, 6) });
               }
             }
+          }
+          break;
+        }
+      }
+    }
+  }
+  if (!hit) {
+    for (const f of fires) {
+      if (Math.hypot(f.x - p.x, f.y - p.y) < range + 18) {
+        const ang = Math.atan2(f.y - p.y, f.x - p.x);
+        let diff = Math.abs(((ang - facing) + Math.PI * 3) % (Math.PI * 2) - Math.PI);
+        if (diff < 0.9) {
+          f.hp = (f.hp === undefined ? 60 : f.hp) - dmg; hit = true;
+          particles.push(...burst(f.x, f.y, 5, '#ff9a3c'));
+          if (f.hp <= 0) {
+            fires.splice(fires.indexOf(f), 1);
+            drops.push({ id: getNetId(), x: f.x, y: f.y, it: 'feu', bob: 0 });
           }
           break;
         }
@@ -3895,11 +4271,17 @@ function processPlayerPlace(p, item, tx, ty) {
   if (Math.hypot(cxw - p.x, cyw - p.y) < p.r + 14 && item === 'mur') return;
   if (trees.some(t => Math.hypot(t.x - cxw, t.y - cyw) < 30)) return;
 
+  if (item === 'feu') {
+    fires.push({ id: getNetId(), x: cxw, y: cyw, t: 0, hp: 60, maxhp: 60 });
+    if (!p.creative && p.inv[item] > 0) p.inv[item]--;
+    return;
+  }
+
   const s = { id: getNetId(), type: item, tx, ty, x: cxw, y: cyw, hp: item === 'mur' ? 60 : 80, maxhp: item === 'mur' ? 60 : 80 };
   if (item === 'coffre') s.inv = {};
   placed.push(s); structGrid[skey(tx, ty)] = s;
   
-  if (p.inv[item] > 0) p.inv[item]--;
+  if (!p.creative && p.inv[item] > 0) p.inv[item]--;
 }
 
 function processChestTransfer(p, data) {
@@ -4013,7 +4395,7 @@ function broadcastSyncSlow() {
     placed: placed.map(s => ({
       id: s.id, type: s.type, tx: s.tx, ty: s.ty, x: s.x, y: s.y, hp: s.hp, maxhp: s.maxhp, inv: s.inv
     })),
-    fires: fires.map(f => ({ id: f.id, x: f.x, y: f.y, t: f.t })),
+    fires: fires.map(f => ({ id: f.id, x: f.x, y: f.y, t: f.t, hp: f.hp })),
     drops: drops.map(d => ({ id: d.id, x: d.x, y: d.y, it: d.it, bob: d.bob }))
   };
   for (const c of connections) if (c.open) c.send(syncPacket);
