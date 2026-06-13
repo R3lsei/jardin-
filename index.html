@@ -2525,11 +2525,28 @@ function update(dt){
     
     // Movement
     let dx = 0, dy = 0;
+    const wx = mouse.x + cam.x;
+    const wy = mouse.y + cam.y;
+    player.facing = Math.atan2(wy - player.y, wx - player.x);
+    
     if (!paused && !chatOpen) {
-      if (keys.KeyW || keys.KeyZ || keys.ArrowUp) dy -= 1;
-      if (keys.KeyS || keys.ArrowDown) dy += 1;
-      if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) dx -= 1;
-      if (keys.KeyD || keys.ArrowRight) dx += 1;
+      let forward = 0;
+      let strafe = 0;
+      if (keys.KeyW || keys.KeyZ || keys.ArrowUp) forward += 1;
+      if (keys.KeyS || keys.ArrowDown) forward -= 1;
+      if (keys.KeyD || keys.ArrowRight) strafe += 1;
+      if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) strafe -= 1;
+      
+      if (forward !== 0 || strafe !== 0) {
+        const cos = Math.cos(player.facing);
+        const sin = Math.sin(player.facing);
+        dx = cos * forward - sin * strafe;
+        dy = sin * forward + cos * strafe;
+        
+        const len = Math.hypot(dx, dy);
+        dx /= len;
+        dy /= len;
+      }
     }
     
     const sprint = (keys.ShiftLeft || keys.ShiftRight) && player.stamina > 2;
@@ -2537,9 +2554,6 @@ function update(dt){
     const hasBoots = player.inv && player.inv['bottes_hate'];
     
     let spd = player.spd * (sprint ? 1.55 : 1) * (onMud ? 0.6 : 1) * (hasBoots ? 1.2 : 1);
-    const wx = mouse.x + cam.x;
-    const wy = mouse.y + cam.y;
-    player.facing = Math.atan2(wy - player.y, wx - player.x);
     
     if (creativeMode) {
       player.stamina = player.maxstamina;
@@ -2550,7 +2564,6 @@ function update(dt){
       player.stamina = Math.min(player.maxstamina, player.stamina + dt * recoveryRate);
     }
     
-    if (dx && dy) { dx *= 0.707; dy *= 0.707; }
     if (dx || dy) {
       moveEntity(player, dx * spd * dt, dy * spd * dt);
       player.walkT = (player.walkT || 0) + dt * 8;
@@ -2638,20 +2651,34 @@ function update(dt){
 
   /* mouvement */
   let dx=0,dy=0;
+  const wx = mouse.x + cam.x;
+  const wy = mouse.y + cam.y;
+  player.facing = Math.atan2(wy - player.y, wx - player.x);
+  
   if (!paused && !chatOpen) {
-    if(keys.KeyW||keys.KeyZ||keys.ArrowUp)dy-=1;
-    if(keys.KeyS||keys.ArrowDown)dy+=1;
-    if(keys.KeyA||keys.KeyQ||keys.ArrowLeft)dx-=1;
-    if(keys.KeyD||keys.ArrowRight)dx+=1;
+    let forward = 0;
+    let strafe = 0;
+    if (keys.KeyW || keys.KeyZ || keys.ArrowUp) forward += 1;
+    if (keys.KeyS || keys.ArrowDown) forward -= 1;
+    if (keys.KeyD || keys.ArrowRight) strafe += 1;
+    if (keys.KeyA || keys.KeyQ || keys.ArrowLeft) strafe -= 1;
+    
+    if (forward !== 0 || strafe !== 0) {
+      const cos = Math.cos(player.facing);
+      const sin = Math.sin(player.facing);
+      dx = cos * forward - sin * strafe;
+      dy = sin * forward + cos * strafe;
+      
+      const len = Math.hypot(dx, dy);
+      dx /= len;
+      dy /= len;
+    }
   }
   
   const sprint=(keys.ShiftLeft||keys.ShiftRight)&&player.stamina>2;
   const onMud=map[(player.y/TS|0)*MW+(player.x/TS|0)]===7;
   const hasBoots = player.inv && player.inv['bottes_hate'];
   let spd=player.spd*(sprint?1.55:1)*(onMud?0.6:1)*(hasBoots?1.2:1);
-  const wx = mouse.x + cam.x;
-  const wy = mouse.y + cam.y;
-  player.facing = Math.atan2(wy - player.y, wx - player.x);
   
   if (creativeMode) {
     player.stamina = player.maxstamina;
@@ -2660,8 +2687,6 @@ function update(dt){
     const recoveryRate = 15 * (has('chapeau_fleur') ? 1.2 : 1);
     player.stamina = Math.min(player.maxstamina, player.stamina + dt * recoveryRate);
   }
-  
-  if(dx&&dy){dx*=0.707;dy*=0.707;}
   if(dx||dy){
     moveEntity(player,dx*spd*dt,dy*spd*dt);
     player.walkT=(player.walkT||0)+dt*8;
